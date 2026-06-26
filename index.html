@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
-<title>Spirit Board</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='1' y='1' width='30' height='30' rx='7' fill='%231C1C1E' stroke='%233A3A3C'/><path d='M11.5 15V12a4.5 4.5 0 0 1 9 0v3' fill='none' stroke='%23E6E6EA' stroke-width='2'/><rect x='9' y='15' width='14' height='11' rx='2.5' fill='%23E6E6EA'/><circle cx='16' cy='20' r='1.4' fill='%231C1C1E'/></svg>">
+<title>Protected</title>
 <style>
   /* ---------- shared ---------- */
   :root{
@@ -80,19 +81,19 @@
   @keyframes shake{ 0%,100%{transform:translateX(0)} 20%{transform:translateX(-7px)} 40%{transform:translateX(7px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
 
   /* info icon (bottom-left) + magician insert */
-  #info{ position:absolute; left:16px; bottom:14px; width:30px; height:30px; border:none; background:transparent;
+  #info{ position:absolute; left:16px; top:16px; width:30px; height:30px; border:none; background:transparent;
     color:#5a5a5e; cursor:pointer; opacity:.7; transition:opacity .25s ease; }
   #info:hover{ opacity:1; }
   #info svg{ width:100%; height:100%; display:block; }
-  #infoCard{ position:absolute; left:14px; bottom:54px; max-width:min(78vw,300px);
+  #infoCard{ position:absolute; left:14px; top:54px; max-width:min(78vw,300px);
     background:#161618; border:1px solid #2c2c2e; border-radius:12px; padding:14px 16px;
     color:#b8b8bd; font-size:13px; line-height:1.55; letter-spacing:.01em;
-    opacity:0; transform:translateY(6px); pointer-events:none; transition:opacity .25s ease, transform .25s ease; }
+    opacity:0; transform:translateY(-6px); pointer-events:none; transition:opacity .25s ease, transform .25s ease; }
   #infoCard.show{ opacity:1; transform:translateY(0); }
   #infoCard b{ color:#e6e6ea; font-weight:600; }
 
   /* skin toggle (bottom-right) */
-  #skinToggle{ position:absolute; right:16px; bottom:16px; display:flex; gap:2px;
+  #skinToggle{ position:absolute; right:16px; top:16px; display:flex; gap:2px;
     font-size:11px; letter-spacing:.14em; text-transform:uppercase; user-select:none; }
   #skinToggle button{ background:transparent; border:none; font:inherit; letter-spacing:inherit;
     color:#48484a; cursor:pointer; padding:4px 8px; border-radius:8px; transition:color .25s ease, background .25s ease; }
@@ -137,7 +138,7 @@
       <circle cx="17" cy="25" r="2.2" fill="#8E8E93" stroke="none"/>
     </svg>
     <div class="title">Password Protected for safety</div>
-    <input id="pw" type="password" inputmode="text" autocomplete="off"
+    <input id="pw" type="text" inputmode="text" autocomplete="off" data-lpignore="true" data-1p-ignore
            autocapitalize="off" autocorrect="off" spellcheck="false" name="seal" aria-label="password">
 
     <button id="info" aria-label="instructions" title="Instructions">
@@ -588,7 +589,30 @@
   /* ===== THE PASSWORD PAGE ===== */
   const veil=document.getElementById('veil'), pw=document.getElementById('pw');
   setTimeout(()=>pw.focus(),350);
-  function commune(){ Audio.unlock(); const word=pw.value; pw.value="";
+  // Covert field: the real word lives in `secret`; the field shows password dots.
+  // On touch devices the native password field briefly flashes the REAL last
+  // character before masking it (that's what leaked the word) — so we mask it
+  // ourselves and flash a FAKE letter instead, then a dot. On desktop (no touch)
+  // it's just dots immediately, like a normal password field.
+  let secret="";
+  const isTouch=(navigator.maxTouchPoints||0)>0 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
+  let revealTimer=null, fakeChar="";
+  function fakeFor(ch){
+    const pool = /[0-9]/.test(ch) ? "0123456789" : /[A-Z]/.test(ch) ? "ABCDEFGHIJKLMNOPQRSTUVWXYZ" : "abcdefghijklmnopqrstuvwxyz";
+    let f; do{ f=pool[Math.floor(Math.random()*pool.length)]; }while(f===ch && pool.length>1); return f;
+  }
+  function renderMask(showFake){ const n=secret.length; pw.value=(showFake&&n>0)?"•".repeat(n-1)+fakeChar:"•".repeat(n); }
+  pw.addEventListener('beforeinput',e=>{
+    const t=e.inputType||'';
+    if(t.indexOf('insert')===0){
+      let data=e.data; if(data==null && e.dataTransfer) data=e.dataTransfer.getData('text');
+      if(data){ e.preventDefault(); for(const ch of data) secret+=ch; clearTimeout(revealTimer);
+        if(isTouch){ fakeChar=fakeFor(data[data.length-1]); renderMask(true); revealTimer=setTimeout(()=>renderMask(false),1100); }
+        else renderMask(false);
+      }
+    } else if(t.indexOf('delete')===0){ e.preventDefault(); clearTimeout(revealTimer); secret=secret.slice(0,-1); renderMask(false); }
+  });
+  function commune(){ Audio.unlock(); clearTimeout(revealTimer); const word=secret; secret=""; pw.value="";
     secretLetters=word.toUpperCase().split("").filter(c=>/[A-Z0-9]/.test(c));
     veil.classList.add('dismiss'); setTimeout(()=>{veil.style.display='none';},1200);
     document.body.classList.add('revealed');
