@@ -574,12 +574,13 @@
   let secretLetters=[]; let started=false;
   async function runRoutine(){
     if(started)return; started=true; hintEl.style.opacity=0;
-    await startIdle(5,true);
+    await startIdle(15,true);
     await startRoute(["yes"], ATT.controlDwell, false);
-    await startIdle(5,true);
+    await startIdle(15,true);
     await startRoute(["no"], ATT.controlDwell, false);
-    await startIdle(6,true);
+    await startIdle(15,true);
     if(secretLetters.length){ readoutEl.classList.add('writing'); await startRoute(secretLetters, ATT.letterDwell, true); readoutEl.classList.remove('writing'); }
+    await startIdle(10,true);
     await startRoute(["goodbye"], ATT.controlDwell, false);
     engine.mode='rest';
   }
@@ -630,30 +631,20 @@
   /* ===== THE PASSWORD PAGE ===== */
   const veil=document.getElementById('veil'), pw=document.getElementById('pw'), pwError=document.getElementById('pwerror');
   setTimeout(()=>pw.focus(),350);
-  // Covert field: the real word lives in `secret`; the field shows password dots.
-  // On touch devices the native password field briefly flashes the REAL last
-  // character before masking it (that's what leaked the word) — so we mask it
-  // ourselves and flash a FAKE letter instead, then a dot. On desktop (no touch)
-  // it's just dots immediately, like a normal password field.
+  // Covert field: the real word lives in `secret`; the field shows password dots
+  // only. Every character is masked as a dot on all surfaces — no preview letters —
+  // so the native field never flashes the real character on touch devices.
   let secret="";
-  const isTouch=(navigator.maxTouchPoints||0)>0 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
-  let revealTimer=null, fakeChar="", unlockTimer=null;
-  function fakeFor(ch){
-    const pool = /[0-9]/.test(ch) ? "0123456789" : /[A-Z]/.test(ch) ? "ABCDEFGHIJKLMNOPQRSTUVWXYZ" : "abcdefghijklmnopqrstuvwxyz";
-    let f; do{ f=pool[Math.floor(Math.random()*pool.length)]; }while(f===ch && pool.length>1); return f;
-  }
-  function renderMask(showFake){ const n=secret.length; pw.value=(showFake&&n>0)?"•".repeat(n-1)+fakeChar:"•".repeat(n); }
+  let unlockTimer=null;
+  function renderMask(){ pw.value="•".repeat(secret.length); }
   pw.addEventListener('beforeinput',e=>{
     const t=e.inputType||'';
     if(t.indexOf('insert')===0){
       let data=e.data; if(data==null && e.dataTransfer) data=e.dataTransfer.getData('text');
-      if(data){ e.preventDefault(); pwError.classList.remove('show'); clearTimeout(unlockTimer); unlockTimer=null; for(const ch of data) secret+=ch; clearTimeout(revealTimer);
-        if(isTouch){ fakeChar=fakeFor(data[data.length-1]); renderMask(true); revealTimer=setTimeout(()=>renderMask(false),1100); }
-        else renderMask(false);
-      }
-    } else if(t.indexOf('delete')===0){ e.preventDefault(); clearTimeout(revealTimer); secret=secret.slice(0,-1); renderMask(false); }
+      if(data){ e.preventDefault(); pwError.classList.remove('show'); clearTimeout(unlockTimer); unlockTimer=null; for(const ch of data) secret+=ch; renderMask(); }
+    } else if(t.indexOf('delete')===0){ e.preventDefault(); secret=secret.slice(0,-1); renderMask(); }
   });
-  function commune(){ Audio.unlock(); clearTimeout(revealTimer); const word=secret; secret=""; pw.value=""; pw.blur();
+  function commune(){ Audio.unlock(); const word=secret; secret=""; pw.value=""; pw.blur();
     secretLetters=word.toUpperCase().split("").filter(c=>/[A-Z0-9]/.test(c));
     veil.classList.add('dismiss'); setTimeout(()=>{veil.style.display='none';},1200);
     document.body.classList.add('revealed');
