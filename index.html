@@ -72,13 +72,36 @@
   #veil.dismiss{ opacity:0; pointer-events:none; }
   #lock{ opacity:.55; }
   #veil .title{ color:#d7d7db; font-size:15px; font-weight:500; letter-spacing:.26em; text-transform:uppercase; text-align:center; padding:0 20px; }
-  #pw{ width:min(74vw,300px); height:46px; text-align:center; background:rgba(255,255,255,.04);
-    border:1px solid #2c2c2e; border-radius:13px; color:#fff; font-family:var(--font);
-    font-size:20px; letter-spacing:.5em; outline:none; caret-color:#8e8e93;
+  /* #pwBox is the box the user sees. The real <input id="pw"> sits inside it,
+     stretched to fill it, but is rendered fully invisible (transparent text,
+     transparent caret, no native UI) — so the field can never flash a real
+     character on any platform. #pwMask is a plain, pointer-events:none overlay
+     that only ever contains "•" characters plus a fake blinking caret, kept in
+     sync with pw.value.length via the native 'input' event. */
+  .pwbox{ position:relative; width:min(74vw,300px); height:46px; background:rgba(255,255,255,.04);
+    border:1px solid #2c2c2e; border-radius:13px;
     transition:border-color .25s ease, transform .08s ease; }
-  #pw:focus{ border-color:#48484a; }
-  #pw.shake{ animation:shake .32s ease; }
+  .pwbox.focused{ border-color:#48484a; }
+  .pwbox.shake{ animation:shake .32s ease; }
   @keyframes shake{ 0%,100%{transform:translateX(0)} 20%{transform:translateX(-7px)} 40%{transform:translateX(7px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+  #pw{ position:absolute; inset:0; width:100%; height:100%; margin:0; padding:0 6px;
+    border:none; outline:none; background:transparent; text-align:center;
+    font-family:var(--font); font-size:20px; letter-spacing:.5em;
+    color:transparent; -webkit-text-fill-color:transparent; caret-color:transparent;
+    text-shadow:none; -webkit-tap-highlight-color:transparent;
+    -webkit-appearance:none; appearance:none; }
+  #pw::selection{ background:transparent; }
+  /* Stop Chrome/Safari painting an autofill background through the invisible field */
+  #pw:-webkit-autofill, #pw:-webkit-autofill:hover, #pw:-webkit-autofill:focus{
+    -webkit-text-fill-color:transparent !important; caret-color:transparent !important;
+    transition:background-color 9999s ease-in-out 0s; background-color:transparent !important; }
+  #pwMask{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#fff; font-family:var(--font); font-size:20px; letter-spacing:.5em;
+    white-space:nowrap; pointer-events:none; }
+  #pwDots{ display:inline-block; }
+  #pwCaret{ display:inline-block; width:2px; height:1.15em; background:#fff;
+    margin-left:.18em; vertical-align:middle; opacity:0; animation:blink 1s steps(1,end) infinite; }
+  .pwbox.focused #pwCaret{ opacity:.85; }
   .pwwrap{ position:relative; display:flex; flex-direction:column; align-items:center; }
   #pwerror{ position:absolute; top:calc(100% + 14px); left:50%; transform:translateX(-50%);
     color:#d9544f; font-size:13px; letter-spacing:.06em; white-space:nowrap; opacity:0; transition:opacity .2s ease; }
@@ -145,8 +168,11 @@
     </svg>
     <div class="title">Password Protected for safety</div>
     <div class="pwwrap">
-      <input id="pw" type="text" inputmode="text" autocomplete="off" data-lpignore="true" data-1p-ignore
-             autocapitalize="off" autocorrect="off" spellcheck="false" name="seal" aria-label="password">
+      <div class="pwbox" id="pwBox">
+        <input id="pw" type="password" inputmode="text" autocomplete="off" data-lpignore="true" data-1p-ignore
+               autocapitalize="off" autocorrect="off" spellcheck="false" name="seal" aria-label="password">
+        <div id="pwMask" aria-hidden="true"><span id="pwDots"></span><span id="pwCaret"></span></div>
+      </div>
       <div id="pwerror" aria-live="polite">Incorrect password</div>
     </div>
 
@@ -630,26 +656,31 @@
 
   /* ===== THE PASSWORD PAGE ===== */
   const veil=document.getElementById('veil'), pw=document.getElementById('pw'), pwError=document.getElementById('pwerror');
+  const pwBox=document.getElementById('pwBox'), pwDots=document.getElementById('pwDots');
   setTimeout(()=>pw.focus(),350);
-  // Covert field: the real word lives in `secret`; the field shows password dots
-  // only. Every character is masked as a dot on all surfaces — no preview letters —
-  // so the native field never flashes the real character on touch devices.
-  let secret="";
+  // Covert field: `pw` is a REAL <input type="password"> holding the actual word —
+  // it is never shown (transparent text/caret, no visible native UI) and its value
+  // is only ever read at the moment of unlock. The only thing rendered on screen is
+  // `pwDots`, a plain dot-per-character display kept in sync with pw.value.length on
+  // the native 'input' event. We never call preventDefault or touch pw.value while
+  // typing, so every platform — including Android IME composition, autocorrect,
+  // swipe-typing, and paste — goes through the browser's normal, unbroken text
+  // path. There is no custom char-diffing left to desync or to flash a real
+  // character through, even briefly.
   let unlockTimer=null;
-  function renderMask(){ pw.value="•".repeat(secret.length); }
-  pw.addEventListener('beforeinput',e=>{
-    const t=e.inputType||'';
-    if(t.indexOf('insert')===0){
-      let data=e.data; if(data==null && e.dataTransfer) data=e.dataTransfer.getData('text');
-      if(data){ e.preventDefault(); pwError.classList.remove('show'); clearTimeout(unlockTimer); unlockTimer=null; for(const ch of data) secret+=ch; renderMask(); }
-    } else if(t.indexOf('delete')===0){ e.preventDefault(); secret=secret.slice(0,-1); renderMask(); }
+  function renderMask(){ pwDots.textContent="•".repeat(pw.value.length); }
+  pw.addEventListener('input',()=>{
+    pwError.classList.remove('show'); clearTimeout(unlockTimer); unlockTimer=null;
+    renderMask();
   });
-  function commune(){ Audio.unlock(); const word=secret; secret=""; pw.value=""; pw.blur();
+  pw.addEventListener('focus',()=>pwBox.classList.add('focused'));
+  pw.addEventListener('blur',()=>pwBox.classList.remove('focused'));
+  function commune(){ Audio.unlock(); const word=pw.value; pw.value=""; renderMask(); pw.blur();
     secretLetters=word.toUpperCase().split("").filter(c=>/[A-Z0-9]/.test(c));
     veil.classList.add('dismiss'); setTimeout(()=>{veil.style.display='none';},1200);
     document.body.classList.add('revealed');
     Audio.beginBoard(); hintEl.style.opacity=1; }
-  function showPwError(){ pwError.classList.add('show'); pw.classList.remove('shake'); void pw.offsetWidth; pw.classList.add('shake'); }
+  function showPwError(){ pwError.classList.add('show'); pwBox.classList.remove('shake'); void pwBox.offsetWidth; pwBox.classList.add('shake'); }
   // Wait out the double-press window before reacting: a quick SECOND press unlocks
   // (and never shows the error); a lone press shows "Incorrect password" only once
   // the window passes — so the unlock and the error animation never play together.
