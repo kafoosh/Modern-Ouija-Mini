@@ -7,10 +7,13 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='1' y='1' width='30' height='30' rx='7' fill='%231C1C1E' stroke='%233A3A3C'/><path d='M11.5 15V12a4.5 4.5 0 0 1 9 0v3' fill='none' stroke='%23E6E6EA' stroke-width='2'/><rect x='9' y='15' width='14' height='11' rx='2.5' fill='%23E6E6EA'/><circle cx='16' cy='20' r='1.4' fill='%231C1C1E'/></svg>">
 <title>Protected</title>
 <style>
+  /* ---------- shared ---------- */
   :root{
+    /* Noir (NoirTheme.swift) */
     --letter-idle:#48484A; --letter-visited:#8E8E93; --letter-active:#ffffff;
     --control-stroke:#2C2C2E; --control-text:#8E8E93; --goodbye-fill:#1C1C1E;
     --instruction:#48484A;
+    /* Dial (DialTheme.swift) */
     --dial-accent:#B3A6E0; --dial-needle:#B22222;
     --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", system-ui, "Segoe UI", Roboto, sans-serif;
   }
@@ -25,6 +28,7 @@
   #wrap{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
   #stage{ position:relative; }
 
+  /* ---------- Noir board ---------- */
   .glyph{ position:absolute; transform:translate(-50%,-50%); color:var(--letter-idle);
     transition:color .45s ease, text-shadow .45s ease; white-space:nowrap; letter-spacing:.02em; }
   .glyph.letter{ font-weight:500; }
@@ -42,10 +46,12 @@
     pointer-events:auto; cursor:grab; will-change:transform,filter; }
   #planchette svg{ display:block; overflow:visible; }
 
+  /* ---------- Dial board ---------- */
   #dialLayer{ position:absolute; inset:0; pointer-events:auto; cursor:grab; }
   #dialLayer canvas{ position:absolute; left:0; top:0; }
   #dialStatic{ opacity:.5; mix-blend-mode:screen; }
 
+  /* ---------- shared overlays ---------- */
   #readout{ position:absolute; left:50%; transform:translateX(-50%); text-align:center;
     color:#fff; font-weight:300; letter-spacing:.38em; white-space:nowrap; min-height:1em;
     text-shadow:0 0 18px rgba(255,255,255,.25); pointer-events:none; }
@@ -59,34 +65,26 @@
     transition:opacity 1s ease; pointer-events:none; }
   body[data-skin="dial"] #hint{ color:rgba(255,255,255,.4); }
 
+  /* ---------- the password page ---------- */
   #veil{ position:fixed; inset:0; z-index:10; background:#000;
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px;
     transition:opacity 1.1s ease; }
   #veil.dismiss{ opacity:0; pointer-events:none; }
   #lock{ opacity:.55; }
   #veil .title{ color:#d7d7db; font-size:15px; font-weight:500; letter-spacing:.26em; text-transform:uppercase; text-align:center; padding:0 20px; }
+  #pw{ width:min(74vw,300px); height:46px; text-align:center; background:rgba(255,255,255,.04);
+    border:1px solid #2c2c2e; border-radius:13px; color:#fff; font-family:var(--font);
+    font-size:20px; letter-spacing:.5em; outline:none; caret-color:#8e8e93;
+    transition:border-color .25s ease, transform .08s ease; }
+  #pw:focus{ border-color:#48484a; }
+  #pw.shake{ animation:shake .32s ease; }
+  @keyframes shake{ 0%,100%{transform:translateX(0)} 20%{transform:translateX(-7px)} 40%{transform:translateX(7px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
   .pwwrap{ position:relative; display:flex; flex-direction:column; align-items:center; }
   #pwerror{ position:absolute; top:calc(100% + 14px); left:50%; transform:translateX(-50%);
     color:#d9544f; font-size:13px; letter-spacing:.06em; white-space:nowrap; opacity:0; transition:opacity .2s ease; }
   #pwerror.show{ opacity:1; }
 
-  #maskDisplay {
-    width:min(74vw,300px); height:46px; background:rgba(255,255,255,.04);
-    border:1px solid #2c2c2e; border-radius:13px; color:#fff;
-    font-family:var(--font); font-size:20px; letter-spacing:.5em;
-    display:flex; align-items:center; justify-content:center;
-    user-select:none; cursor:text; outline:none; transition:border-color .25s ease;
-    position:relative; z-index:2;
-  }
-  #maskDisplay:focus-within { border-color:#48484a; }
-
-  #realInput {
-    position:absolute; inset:0; width:100%; height:100%; z-index:1;
-    background:transparent; color:transparent; caret-color:#8e8e93;  /* visible caret for feedback */
-    border:none; outline:none; font-size:20px; letter-spacing:.5em;
-    text-align:center; font-family:var(--font);
-  }
-
+  /* info icon (bottom-left) + magician insert */
   #info{ position:absolute; left:16px; top:16px; width:30px; height:30px; border:none; background:transparent;
     color:#5a5a5e; cursor:pointer; opacity:.7; transition:opacity .25s ease; }
   #info:hover{ opacity:1; }
@@ -99,6 +97,7 @@
   #infoCard b{ color:#e6e6ea; font-weight:600; }
   #infoCard a{ color:#ff7a1a; text-decoration:underline; }
 
+  /* skin toggle — on the board (top-right), hidden until the board is revealed */
   #skinToggle{ position:fixed; right:14px; top:14px; z-index:11; display:none; gap:2px;
     font-size:11px; letter-spacing:.14em; text-transform:uppercase; user-select:none; }
   body.revealed #skinToggle{ display:flex; }
@@ -106,9 +105,11 @@
     color:#48484a; cursor:pointer; padding:4px 8px; border-radius:8px; transition:color .25s ease, background .25s ease; }
   #skinToggle button.on{ color:#d7d7db; background:rgba(255,255,255,.06); }
 
+  /* footer (bottom-center) */
   #footer{ position:absolute; left:50%; bottom:16px; transform:translateX(-50%);
     color:#3a3a3c; font-size:9.5px; letter-spacing:.14em; white-space:nowrap; pointer-events:none; }
 
+  /* mute (on the board) */
   #mute{ position:fixed; right:14px; bottom:12px; z-index:11; width:30px; height:30px; border:none;
     background:transparent; color:#3a3a3c; cursor:pointer; opacity:.6; transition:opacity .3s ease; display:none; }
   body.revealed #mute{ display:block; }
@@ -121,8 +122,10 @@
   <div id="wrap">
     <div id="stage">
       <canvas id="presence"></canvas>
+      <!-- Noir -->
       <div id="board"></div>
       <div id="planchette" aria-hidden="true"></div>
+      <!-- Dial -->
       <div id="dialLayer" aria-hidden="true">
         <canvas id="dialStatic"></canvas>
         <canvas id="dialFace"></canvas>
@@ -133,6 +136,7 @@
     </div>
   </div>
 
+  <!-- Covert capture: the masked field hides the typed word from onlookers. -->
   <div id="veil">
     <svg id="lock" width="34" height="40" viewBox="0 0 34 40" fill="none" stroke="#8E8E93" stroke-width="1.4">
       <rect x="4" y="17" width="26" height="19" rx="4"/>
@@ -141,10 +145,8 @@
     </svg>
     <div class="title">Password Protected for safety</div>
     <div class="pwwrap">
-      <div id="maskDisplay"></div>
-      <input id="realInput" type="text" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent;color:transparent;caret-color:#8e8e93;border:none;outline:none;font-size:20px;letter-spacing:.5em;text-align:center;" 
-             autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="none" inputmode="text"
-             data-lpignore="true" data-1p-ignore name="seal" aria-label="password">
+      <input id="pw" type="text" inputmode="text" autocomplete="off" data-lpignore="true" data-1p-ignore
+             autocapitalize="off" autocorrect="off" spellcheck="false" name="seal" aria-label="password">
       <div id="pwerror" aria-live="polite">Incorrect password</div>
     </div>
 
@@ -162,6 +164,7 @@
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path id="wave" d="M16 8.5a4.5 4.5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
   </button>
 
+  <!-- skin toggle lives on the board now (shown after reveal) -->
   <div id="skinToggle" role="group" aria-label="board style">
     <button data-skin="noir" class="on">Noir</button>
     <button data-skin="dial">Dial</button>
@@ -170,6 +173,7 @@
 <script>
 "use strict";
 (function(){
+  /* ===== PARAMETERS — ported from the iOS app (AttitudeProfile.agitated) ===== */
   const ATT = { baseSpeed:280, letterDwell:[0.30,0.50], controlDwell:[1.00,1.40],
                 wobbleAmp:4.8, wobbleFreq:3.4, overshootProb:0.72, overshootMag:15, speedVar:0.7 };
   const REF_W = 390;
@@ -187,8 +191,9 @@
   }
   const shortestDelta=(from,to)=>{ let d=(to-from)%TWO_PI; if(d>Math.PI)d-=TWO_PI; if(d<-Math.PI)d+=TWO_PI; return d; };
 
+  /* ===== AUDIO — procedural, no assets (AudioEngine.swift) ===== */
   const Audio=(function(){
-    let ctx,sp,master,sr=44100,built=false,muted=true;
+    let ctx,sp,master,sr=44100,built=false,muted=true;   // sound OFF by default
     let scrapeTarget=0,scrapeLevel=0,droneTarget=0,droneLevel=0; const scrapeVolume=0.7;
     let boardActive=false,duck=1; const artifactRate=8;
     let samplesUntilNext=0,artType=0,artPos=0,artLen=1,artAmp=0;
@@ -233,11 +238,12 @@
     return {
       unlock(){ if(build())ctx.resume&&ctx.resume(); },
       beginBoard(){ if(build()){ ctx.resume&&ctx.resume(); boardActive=true; droneTarget=0.30; } },
-      setScrape(norm){ scrapeTarget=clamp(norm,0,1)*0.85*scrapeVolume; },
+      setScrape(norm){ scrapeTarget=clamp(norm,0,1)*0.85*scrapeVolume; },   // master.gain is the mute
       toggleMute(){ muted=!muted; if(master)master.gain.value=muted?0:0.8; if(ctx&&ctx.resume)ctx.resume(); return muted; }
     };
   })();
 
+  /* ===== DOM ===== */
   const stage=document.getElementById('stage');
   const boardEl=document.getElementById('board');
   const planEl=document.getElementById('planchette');
@@ -259,7 +265,9 @@
   let W=0,H=0,scale=1;
   let skin = (localStorage.getItem('ouija-skin')==='dial') ? 'dial' : 'noir';
 
+  /* noir positions */
   let pos={}, idleCenter={x:0,y:0}; const glyphEls={};
+  /* dial geometry */
   let dialC={x:0,y:0}, dialR=0, dialPR=0, dialItems=[], dialAngles={};
   let fctx,dctx,sctx;
 
@@ -272,6 +280,7 @@
     W=Math.round(w); H=Math.round(h); scale=W/REF_W;
     stage.style.width=W+"px"; stage.style.height=H+"px";
 
+    /* --- noir arc geometry (LetterLayout.swift) --- */
     const cx=W/2, cy=H*0.62, upperR=W*0.46, lowerR=W*0.345;
     const upSweep={s:152,e:28}, loSweep={s:149,e:31};
     const polar=(deg,r)=>({x:cx+r*Math.cos(deg*Math.PI/180), y:cy-r*Math.sin(deg*Math.PI/180)});
@@ -285,7 +294,8 @@
     pos.yes={x:W*0.22,y:controlY}; pos.goodbye={x:W*0.50,y:controlY}; pos.no={x:W*0.78,y:controlY};
     idleCenter={x:W/2, y:cy-(upperR+lowerR)/2};
 
-    const R=W*0.46, dc={x:W/2, y=H*0.46}, rOut=R*0.87, rIn=R*0.73;
+    /* --- dial geometry (DialLayout.swift) --- */
+    const R=W*0.46, dc={x:W/2, y:H*0.46}, rOut=R*0.87, rIn=R*0.73;
     dialC=dc; dialR=R; dialPR=rOut; dialAngles={}; dialItems=[];
     const pt=(a,r)=>({x:dc.x+Math.sin(a)*r, y:dc.y-Math.cos(a)*r});
     ALPHA.forEach((ch,i)=>{ const a=i/26*TWO_PI; dialAngles[ch]=a; dialItems.push({key:ch,display:ch,angle:a,r:rOut,isControl:false}); });
@@ -328,6 +338,7 @@
       '<circle r="'+(2*scale)+'" fill="rgba(255,255,255,0.45)"/></svg>';
   }
 
+  /* ---- highlighting (skin-aware) ---- */
   let activeKey=null, dialFaceDirty=true;
   function setActive(key){
     if(skin==='noir'){ if(activeKey&&glyphEls[activeKey])glyphEls[activeKey].classList.remove('active'); activeKey=key; if(glyphEls[key])glyphEls[key].classList.add('active'); }
@@ -343,6 +354,7 @@
     activeKey=null; dialFaceDirty=true;
   }
 
+  /* ===== ENGINE (PlanchetteEngine.swift, distilled; skin-aware) ===== */
   const travelWobble=makeWobble(), idleWobble=makeWobble();
   const engine={ skin, mode:'rest', pos:{x:0,y:0}, vel:0, clock:0, idlePhase:0, idleEndClock:0,
     angle:Math.PI, idleAngle:Math.PI, idleRetarget:0,
@@ -359,6 +371,7 @@
     else engine.pos={...pos.goodbye};
   }
 
+  /* ---- noir route ---- */
   function buildRoute(keys){
     const wp=[]; let prev={...engine.pos};
     for(const key of keys){ const tgt=pos[key]; if(!tgt)continue;
@@ -368,6 +381,7 @@
       wp.push({x:tgt.x,y:tgt.y,key,target:true}); prev=tgt; }
     return wp;
   }
+  /* ---- dial route (startDialRoute) ---- */
   function buildDialRoute(keys){
     const out=[]; let cur=engine.angle;
     for(const key of keys){ const base=dialAngles[key]; if(base===undefined)continue;
@@ -404,6 +418,8 @@
   function tickIdle(dt){
     engine.idlePhase+=dt;
     if(skin==='dial'){
+      // Wander: periodically drift the idle heading to a fresh spot so the needle
+      // roams the whole dial (the short way) instead of hovering in one place.
       if(engine.clock>=engine.idleRetarget){
         engine.idleAngle = engine.angle + shortestDelta(engine.angle, rand(0,TWO_PI));
         engine.idleRetarget = engine.clock + rand(0.9,1.9);
@@ -416,7 +432,7 @@
     } else {
       const w=idleWobble(engine.idlePhase*0.8, ATT.wobbleAmp*2.0*scale);
       const drift={x:Math.sin(engine.idlePhase*0.6)*W*0.08, y:Math.cos(engine.idlePhase*0.45)*H*0.04};
-      const target={x:idleCenter.x+drift.x+w.x, y=idleCenter.y+drift.y+w.y}; const alpha=1-Math.pow(0.001,dt);
+      const target={x:idleCenter.x+drift.x+w.x, y:idleCenter.y+drift.y+w.y}; const alpha=1-Math.pow(0.001,dt);
       const prev={...engine.pos}; engine.pos.x+=(target.x-engine.pos.x)*alpha; engine.pos.y+=(target.y-engine.pos.y)*alpha;
       engine.vel=dist(prev,engine.pos)/Math.max(dt,0.001);
     }
@@ -484,8 +500,10 @@
 
   function tickDoneIdle(dt){ tickIdle(dt); if(engine.clock>=engine.backToRestAt){ engine.mode='rest'; engine.vel=0; } }
 
+  /* ---- readout ---- */
   let readoutStr=""; function addReadout(ch){ readoutStr+=ch; readtext.textContent=readoutStr; }
 
+  /* ---- presence seismograph ---- */
   const seis=[]; let agitation=0;
   function drawPresence(){ const w=presenceCv.width,h=presenceCv.height,mid=h/2;
     pctx.clearRect(0,0,w,h); pctx.strokeStyle = skin==='dial'?"rgba(255,255,255,0.5)":"rgba(142,142,147,0.9)";
@@ -495,6 +513,7 @@
     const a=Math.max(agitation,0.05); seis.push((Math.random()*2-1)*a*(0.6+Math.random()*0.4));
     if(seis.length>Math.floor(presenceCv.width/2))seis.shift(); }
 
+  /* ---- dial rendering ---- */
   function dialFont(it){ const R=dialR; if(!it.isControl) return /[0-9]/.test(it.key)?[R*0.092,300]:[R*0.105,300];
     return it.key==="goodbye"?[R*0.052,600]:[R*0.082,600]; }
   function drawGlyph(c,it,color,glow,glowBlur){ const [sz,wt]=dialFont(it);
@@ -508,11 +527,14 @@
     dialFaceDirty=false; }
   function drawDialDyn(){
     dctx.clearRect(0,0,W,H); const R=dialR,c=dialC,a=engine.angle;
+    // arc-sweep trail
     if(engine.trail.length>1){ for(let i=1;i<engine.trail.length;i++){ const alpha=i/engine.trail.length*0.16;
       dctx.strokeStyle="rgba(178,34,34,"+alpha.toFixed(3)+")"; dctx.lineWidth=1.5; dctx.beginPath();
       dctx.moveTo(engine.trail[i-1].x,engine.trail[i-1].y); dctx.lineTo(engine.trail[i].x,engine.trail[i].y); dctx.stroke(); } }
+    // sweep glow on nearby glyphs
     for(const it of dialItems){ const ad=Math.abs(Math.atan2(Math.sin(a-it.angle),Math.cos(a-it.angle))); if(ad>=0.16)continue;
       const intensity=1-ad/0.16; drawGlyph(dctx, it, "rgba(179,166,224,"+(0.25+0.6*intensity).toFixed(3)+")", "rgba(179,166,224,"+(0.9*intensity).toFixed(3)+")", 9*intensity); }
+    // needle
     const dir={x:Math.sin(a),y:-Math.cos(a)}, perp={x:Math.cos(a),y:Math.sin(a)};
     const P=(al,si)=>({x:c.x+dir.x*al+perp.x*si, y:c.y+dir.y*al+perp.y*si});
     const tipR=R*0.80,bh=R*0.013,th=R*0.004,tailR=R*0.26,starR=R*0.03;
@@ -530,10 +552,12 @@
     const count=Math.floor(W*H/900); for(let i=0;i<count;i++){ const x=Math.random()*W,y=Math.random()*H,al=Math.random()*0.06;
       sctx.fillStyle="rgba(255,255,255,"+al.toFixed(3)+")"; sctx.fillRect(x,y,1.3,1.3); } }
 
+  /* ---- planchette (noir) ---- */
   function drawPlanchette(){ planEl.style.left=engine.pos.x+"px"; planEl.style.top=engine.pos.y+"px";
     const g=clamp(engine.vel/(300*scale),0,1);
     planEl.style.filter="drop-shadow(0 0 "+(6+g*16).toFixed(1)+"px rgba(255,255,255,"+(0.25+g*0.4).toFixed(2)+"))"; }
 
+  /* ===== MAIN LOOP ===== */
   let last=0;
   function frame(ts){ const t=ts/1000; const dt=last===0?0.016:Math.min(t-last,0.05); last=t; engine.clock=t; drawFrame(dt,false); requestAnimationFrame(frame); }
   function drawFrame(dt,forceDraw){
@@ -546,6 +570,7 @@
     pushPresence(); drawPresence();
   }
 
+  /* ===== ROUTINE — the fixed 7-part séance ===== */
   let secretLetters=[]; let started=false;
   async function runRoutine(){
     if(started)return; started=true; hintEl.style.opacity=0;
@@ -559,6 +584,9 @@
     await startRoute(["goodbye"], ATT.controlDwell, false);
     engine.mode='rest';
   }
+  // The performer DRAGS the planchette / rotates the needle, then releases to
+  // start the routine (the iOS app's wake gesture). After the routine, a
+  // drag-release just sends it idle again — it never re-runs.
   let dragging=false;
   function dragPoint(e){
     const r=stage.getBoundingClientRect();
@@ -567,15 +595,15 @@
     else engine.pos={x,y};
   }
   function onDragStart(e){
-    if(engine.mode!=='rest' && engine.mode!=='done-idle') return;
+    if(engine.mode!=='rest' && engine.mode!=='done-idle') return;   // not while the routine runs
     e.preventDefault(); Audio.unlock();
     dragging=true; engine.mode='dragging'; engine.dragLast=null; dragPoint(e);
   }
   function onDragMove(e){ if(!dragging) return; e.preventDefault(); dragPoint(e); }
   function onDragEnd(){
     if(!dragging) return; dragging=false;
-    if(!started){ runRoutine(); }
-    else { engine.mode='done-idle'; engine.idlePhase=0;
+    if(!started){ runRoutine(); }                       // release → start the routine
+    else { engine.mode='done-idle'; engine.idlePhase=0; // post-routine → idle, never re-run
       if(skin==='dial'){ engine.idleAngle=engine.angle; engine.idleRetarget=engine.clock+rand(0.9,1.9); }
       engine.backToRestAt=engine.clock+rand(3.5,5.5); }
   }
@@ -585,6 +613,7 @@
   window.addEventListener('pointerup',onDragEnd);
   window.addEventListener('pointercancel',onDragEnd);
 
+  /* ===== SKIN ===== */
   function applySkinVisibility(){
     const dial = skin==='dial';
     boardEl.style.display = dial?'none':'block';
@@ -599,63 +628,47 @@
   document.querySelectorAll('#skinToggle button').forEach(b=> b.addEventListener('click',()=>setSkin(b.dataset.skin)) );
   document.querySelectorAll('#skinToggle button').forEach(b=>b.classList.toggle('on', b.dataset.skin===skin));
 
-  /* ===== THE PASSWORD PAGE - FULLY RESTORED DOUBLE-ENTER + CURSOR ===== */
-  const veil=document.getElementById('veil');
-  const realInput=document.getElementById('realInput');
-  const maskDisplay=document.getElementById('maskDisplay');
-  const pwError=document.getElementById('pwerror');
+  /* ===== THE PASSWORD PAGE ===== */
+  const veil=document.getElementById('veil'), pw=document.getElementById('pw'), pwError=document.getElementById('pwerror');
+  setTimeout(()=>pw.focus(),350);
+  // Covert field: the real word lives in `secret`; the field shows password dots
+  // only. Every character is masked as a dot on all surfaces — no preview letters —
+  // so the native field never flashes the real character on touch devices.
   let secret="";
   let unlockTimer=null;
-
-  setTimeout(()=>{ realInput.focus(); },350);
-
-  realInput.addEventListener('input', ()=>{
-    secret = realInput.value;
-    maskDisplay.textContent = "•".repeat(secret.length);
-    pwError.classList.remove('show');
-    if(unlockTimer){ clearTimeout(unlockTimer); unlockTimer=null; }
+  function renderMask(){ pw.value="•".repeat(secret.length); }
+  pw.addEventListener('beforeinput',e=>{
+    const t=e.inputType||'';
+    if(t.indexOf('insert')===0){
+      let data=e.data; if(data==null && e.dataTransfer) data=e.dataTransfer.getData('text');
+      if(data){ e.preventDefault(); pwError.classList.remove('show'); clearTimeout(unlockTimer); unlockTimer=null; for(const ch of data) secret+=ch; renderMask(); }
+    } else if(t.indexOf('delete')===0){ e.preventDefault(); secret=secret.slice(0,-1); renderMask(); }
   });
-
-  maskDisplay.addEventListener('click', ()=>{ realInput.focus(); });
-  veil.addEventListener('pointerdown', e=>{ 
-    if(!veil.classList.contains('dismiss') && e.target.closest('#info,#infoCard,#skinToggle')===null) realInput.focus(); 
-  });
-
-  // Double-Enter exactly as in the original file you sent
-  function handleEnter(e){
-    if(e.key!=='Enter') return; e.preventDefault();
-    if(document.body.classList.contains('revealed')) return;
-    if(unlockTimer){ 
-      clearTimeout(unlockTimer); unlockTimer=null; commune(); 
-    } else { 
-      unlockTimer=setTimeout(()=>{ unlockTimer=null; pwError.classList.add('show'); }, 600); 
-    }
-  }
-  veil.addEventListener('keydown', handleEnter);
-  realInput.addEventListener('keydown', handleEnter);
-
-  function commune(){
-    Audio.unlock();
-    const word=secret;
-    secret=""; 
-    realInput.value=""; 
-    maskDisplay.textContent="";
-    realInput.blur();
+  function commune(){ Audio.unlock(); const word=secret; secret=""; pw.value=""; pw.blur();
     secretLetters=word.toUpperCase().split("").filter(c=>/[A-Z0-9]/.test(c));
-    veil.classList.add('dismiss'); 
-    setTimeout(()=>{veil.style.display='none';},1200);
+    veil.classList.add('dismiss'); setTimeout(()=>{veil.style.display='none';},1200);
     document.body.classList.add('revealed');
-    Audio.beginBoard(); 
-    hintEl.style.opacity=1;
-  }
+    Audio.beginBoard(); hintEl.style.opacity=1; }
+  function showPwError(){ pwError.classList.add('show'); pw.classList.remove('shake'); void pw.offsetWidth; pw.classList.add('shake'); }
+  // Wait out the double-press window before reacting: a quick SECOND press unlocks
+  // (and never shows the error); a lone press shows "Incorrect password" only once
+  // the window passes — so the unlock and the error animation never play together.
+  pw.addEventListener('keydown',e=>{ if(e.key!=='Enter') return; e.preventDefault();
+    if(document.body.classList.contains('revealed')) return;
+    if(unlockTimer){ clearTimeout(unlockTimer); unlockTimer=null; commune(); }      // 2nd press → unlock, no error
+    else { unlockTimer=setTimeout(()=>{ unlockTimer=null; showPwError(); }, 600); } // 1st press → wait for a 2nd
+  });
+  veil.addEventListener('pointerdown',e=>{ if(!veil.classList.contains('dismiss') && e.target.closest('#info,#infoCard,#skinToggle')===null) pw.focus(); });
 
+  /* info insert */
   const info=document.getElementById('info'), infoCard=document.getElementById('infoCard');
   info.addEventListener('click',e=>{ e.stopPropagation(); infoCard.classList.toggle('show'); });
   document.addEventListener('click',e=>{ if(!e.target.closest('#info,#infoCard')) infoCard.classList.remove('show'); });
 
+  /* mute */
   const muteBtn=document.getElementById('mute'), waveEl=document.getElementById('wave');
   function showSound(muted){ muteBtn.style.opacity=muted?0.5:0.78; waveEl.style.display=muted?'none':''; }
-  showSound(true);
+  showSound(true);   // sound OFF by default — tap the icon to turn it on
   muteBtn.addEventListener('click',()=>{ showSound(Audio.toggleMute()); });
 
   /* ===== BOOT ===== */
