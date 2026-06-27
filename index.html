@@ -72,17 +72,20 @@
   #veil.dismiss{ opacity:0; pointer-events:none; }
   #lock{ opacity:.55; }
   #veil .title{ color:#d7d7db; font-size:15px; font-weight:500; letter-spacing:.26em; text-transform:uppercase; text-align:center; padding:0 20px; }
-  #pw{ width:min(74vw,300px); height:46px; text-align:center; background:rgba(255,255,255,.04);
-    border:1px solid #2c2c2e; border-radius:13px; color:#fff; font-family:var(--font);
-    font-size:20px; letter-spacing:.5em; outline:none; caret-color:#8e8e93;
-    transition:border-color .25s ease, transform .08s ease; }
-  #pw:focus{ border-color:#48484a; }
-  #pw.shake{ animation:shake .32s ease; }
-  @keyframes shake{ 0%,100%{transform:translateX(0)} 20%{transform:translateX(-7px)} 40%{transform:translateX(7px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
   .pwwrap{ position:relative; display:flex; flex-direction:column; align-items:center; }
   #pwerror{ position:absolute; top:calc(100% + 14px); left:50%; transform:translateX(-50%);
     color:#d9544f; font-size:13px; letter-spacing:.06em; white-space:nowrap; opacity:0; transition:opacity .2s ease; }
   #pwerror.show{ opacity:1; }
+
+  /* New mask display styling (perfect match to old #pw) */
+  #maskDisplay {
+    width:min(74vw,300px); height:46px; background:rgba(255,255,255,.04);
+    border:1px solid #2c2c2e; border-radius:13px; color:#fff;
+    font-family:var(--font); font-size:20px; letter-spacing:.5em;
+    display:flex; align-items:center; justify-content:center;
+    user-select:none; cursor:text; outline:none; transition:border-color .25s ease;
+  }
+  #maskDisplay:focus-within { border-color:#48484a; }
 
   /* info icon (bottom-left) + magician insert */
   #info{ position:absolute; left:16px; top:16px; width:30px; height:30px; border:none; background:transparent;
@@ -136,7 +139,7 @@
     </div>
   </div>
 
-  <!-- Covert capture: the masked field hides the typed word from onlookers. -->
+  <!-- Updated Veil: hidden real input + visible pure-dots mask (spectator-proof) -->
   <div id="veil">
     <svg id="lock" width="34" height="40" viewBox="0 0 34 40" fill="none" stroke="#8E8E93" stroke-width="1.4">
       <rect x="4" y="17" width="26" height="19" rx="4"/>
@@ -145,8 +148,14 @@
     </svg>
     <div class="title">Password Protected for safety</div>
     <div class="pwwrap">
-      <input id="pw" type="text" inputmode="text" autocomplete="off" data-lpignore="true" data-1p-ignore
-             autocapitalize="off" autocorrect="off" spellcheck="false" name="seal" aria-label="password">
+      <!-- Visible: always shows ONLY dots - no real letters ever appear -->
+      <div id="maskDisplay"></div>
+      
+      <!-- Hidden: real input that captures typing perfectly on Android/iOS/desktop -->
+      <input id="realInput" type="text" style="position:absolute;opacity:0;height:1px;width:1px;overflow:hidden;left:-9999px;" 
+             autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="none" inputmode="text"
+             data-lpignore="true" data-1p-ignore name="seal" aria-label="password">
+
       <div id="pwerror" aria-live="polite">Incorrect password</div>
     </div>
 
@@ -418,8 +427,6 @@
   function tickIdle(dt){
     engine.idlePhase+=dt;
     if(skin==='dial'){
-      // Wander: periodically drift the idle heading to a fresh spot so the needle
-      // roams the whole dial (the short way) instead of hovering in one place.
       if(engine.clock>=engine.idleRetarget){
         engine.idleAngle = engine.angle + shortestDelta(engine.angle, rand(0,TWO_PI));
         engine.idleRetarget = engine.clock + rand(0.9,1.9);
@@ -527,14 +534,11 @@
     dialFaceDirty=false; }
   function drawDialDyn(){
     dctx.clearRect(0,0,W,H); const R=dialR,c=dialC,a=engine.angle;
-    // arc-sweep trail
     if(engine.trail.length>1){ for(let i=1;i<engine.trail.length;i++){ const alpha=i/engine.trail.length*0.16;
       dctx.strokeStyle="rgba(178,34,34,"+alpha.toFixed(3)+")"; dctx.lineWidth=1.5; dctx.beginPath();
       dctx.moveTo(engine.trail[i-1].x,engine.trail[i-1].y); dctx.lineTo(engine.trail[i].x,engine.trail[i].y); dctx.stroke(); } }
-    // sweep glow on nearby glyphs
     for(const it of dialItems){ const ad=Math.abs(Math.atan2(Math.sin(a-it.angle),Math.cos(a-it.angle))); if(ad>=0.16)continue;
       const intensity=1-ad/0.16; drawGlyph(dctx, it, "rgba(179,166,224,"+(0.25+0.6*intensity).toFixed(3)+")", "rgba(179,166,224,"+(0.9*intensity).toFixed(3)+")", 9*intensity); }
-    // needle
     const dir={x:Math.sin(a),y:-Math.cos(a)}, perp={x:Math.cos(a),y:Math.sin(a)};
     const P=(al,si)=>({x:c.x+dir.x*al+perp.x*si, y:c.y+dir.y*al+perp.y*si});
     const tipR=R*0.80,bh=R*0.013,th=R*0.004,tailR=R*0.26,starR=R*0.03;
@@ -584,9 +588,6 @@
     await startRoute(["goodbye"], ATT.controlDwell, false);
     engine.mode='rest';
   }
-  // The performer DRAGS the planchette / rotates the needle, then releases to
-  // start the routine (the iOS app's wake gesture). After the routine, a
-  // drag-release just sends it idle again — it never re-runs.
   let dragging=false;
   function dragPoint(e){
     const r=stage.getBoundingClientRect();
@@ -628,37 +629,61 @@
   document.querySelectorAll('#skinToggle button').forEach(b=> b.addEventListener('click',()=>setSkin(b.dataset.skin)) );
   document.querySelectorAll('#skinToggle button').forEach(b=>b.classList.toggle('on', b.dataset.skin===skin));
 
-  /* ===== THE PASSWORD PAGE ===== */
-  const veil=document.getElementById('veil'), pw=document.getElementById('pw'), pwError=document.getElementById('pwerror');
-  setTimeout(()=>pw.focus(),350);
-  // Covert field: the real word lives in `secret`; the field shows password dots
-  // only. Every character is masked as a dot on all surfaces — no preview letters —
-  // so the native field never flashes the real character on touch devices.
+  /* ===== THE PASSWORD PAGE - FIXED STEALTH VERSION ===== */
+  const veil=document.getElementById('veil');
+  const realInput=document.getElementById('realInput');
+  const maskDisplay=document.getElementById('maskDisplay');
+  const pwError=document.getElementById('pwerror');
   let secret="";
   let unlockTimer=null;
-  function renderMask(){ pw.value="•".repeat(secret.length); }
-  pw.addEventListener('beforeinput',e=>{
-    const t=e.inputType||'';
-    if(t.indexOf('insert')===0){
-      let data=e.data; if(data==null && e.dataTransfer) data=e.dataTransfer.getData('text');
-      if(data){ e.preventDefault(); pwError.classList.remove('show'); clearTimeout(unlockTimer); unlockTimer=null; for(const ch of data) secret+=ch; renderMask(); }
-    } else if(t.indexOf('delete')===0){ e.preventDefault(); secret=secret.slice(0,-1); renderMask(); }
+
+  setTimeout(()=>{ realInput.focus(); },350);
+
+  realInput.addEventListener('input', ()=>{
+    secret = realInput.value;
+    maskDisplay.textContent = "•".repeat(secret.length);
+    pwError.classList.remove('show');
+    if(unlockTimer){ clearTimeout(unlockTimer); unlockTimer=null; }
   });
-  function commune(){ Audio.unlock(); const word=secret; secret=""; pw.value=""; pw.blur();
-    secretLetters=word.toUpperCase().split("").filter(c=>/[A-Z0-9]/.test(c));
-    veil.classList.add('dismiss'); setTimeout(()=>{veil.style.display='none';},1200);
-    document.body.classList.add('revealed');
-    Audio.beginBoard(); hintEl.style.opacity=1; }
-  function showPwError(){ pwError.classList.add('show'); pw.classList.remove('shake'); void pw.offsetWidth; pw.classList.add('shake'); }
-  // Wait out the double-press window before reacting: a quick SECOND press unlocks
-  // (and never shows the error); a lone press shows "Incorrect password" only once
-  // the window passes — so the unlock and the error animation never play together.
-  pw.addEventListener('keydown',e=>{ if(e.key!=='Enter') return; e.preventDefault();
+
+  maskDisplay.addEventListener('click', ()=>{ realInput.focus(); });
+  veil.addEventListener('pointerdown',e=>{ 
+    if(!veil.classList.contains('dismiss') && e.target.closest('#info,#infoCard,#skinToggle')===null) realInput.focus(); 
+  });
+
+  // Double-press Enter logic (preserved exactly)
+  function handleEnter(e){
+    if(e.key!=='Enter') return; e.preventDefault();
     if(document.body.classList.contains('revealed')) return;
-    if(unlockTimer){ clearTimeout(unlockTimer); unlockTimer=null; commune(); }      // 2nd press → unlock, no error
-    else { unlockTimer=setTimeout(()=>{ unlockTimer=null; showPwError(); }, 600); } // 1st press → wait for a 2nd
-  });
-  veil.addEventListener('pointerdown',e=>{ if(!veil.classList.contains('dismiss') && e.target.closest('#info,#infoCard,#skinToggle')===null) pw.focus(); });
+    if(unlockTimer){ 
+      clearTimeout(unlockTimer); unlockTimer=null; commune(); 
+    } else { 
+      unlockTimer=setTimeout(()=>{ unlockTimer=null; pwError.classList.add('show'); }, 600); 
+    }
+  }
+  veil.addEventListener('keydown', handleEnter);
+  realInput.addEventListener('keydown', handleEnter);
+
+  function showPwError(){ 
+    pwError.classList.add('show'); 
+    maskDisplay.style.animation = 'shake .32s ease';
+    setTimeout(()=>{ maskDisplay.style.animation = ''; }, 400);
+  }
+
+  function commune(){
+    Audio.unlock();
+    const word=secret;
+    secret=""; 
+    realInput.value=""; 
+    maskDisplay.textContent="";
+    realInput.blur();
+    secretLetters=word.toUpperCase().split("").filter(c=>/[A-Z0-9]/.test(c));
+    veil.classList.add('dismiss'); 
+    setTimeout(()=>{veil.style.display='none';},1200);
+    document.body.classList.add('revealed');
+    Audio.beginBoard(); 
+    hintEl.style.opacity=1;
+  }
 
   /* info insert */
   const info=document.getElementById('info'), infoCard=document.getElementById('infoCard');
@@ -668,7 +693,7 @@
   /* mute */
   const muteBtn=document.getElementById('mute'), waveEl=document.getElementById('wave');
   function showSound(muted){ muteBtn.style.opacity=muted?0.5:0.78; waveEl.style.display=muted?'none':''; }
-  showSound(true);   // sound OFF by default — tap the icon to turn it on
+  showSound(true);
   muteBtn.addEventListener('click',()=>{ showSound(Audio.toggleMute()); });
 
   /* ===== BOOT ===== */
