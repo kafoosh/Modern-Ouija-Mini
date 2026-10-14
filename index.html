@@ -439,13 +439,13 @@
     route:[], ri:0, segFrom:{x:0,y:0}, segLen:1, traveled:0, segSpeedMul:1, segStartAngle:0,
     dwelling:false, dwellT:0, dwellDur:0, fired:false, shudders:[],
     dwellRange:ATT.letterDwell, isSpelling:false, resolver:null, backToRestAt:0, trail:[],
-    nIdle:null, surgeAt:Infinity, surgeEnd:Infinity };
+    nIdle:null, surgeAt:Infinity, surgeEnd:Infinity, ramp:null, fling:null };
 
   const dialPoint=a=>({x:dialC.x+Math.sin(a)*dialPR, y:dialC.y-Math.cos(a)*dialPR});
   const nextSpeedMul=()=>Math.max(0.25,1+rand(-ATT.speedVar,ATT.speedVar));
 
   function resetToRest(){
-    engine.mode='rest'; engine.vel=0; engine.route=[]; engine.trail=[]; engine.surgeAt=Infinity; clearHighlights();
+    engine.mode='rest'; engine.vel=0; engine.route=[]; engine.trail=[]; engine.surgeAt=Infinity; engine.ramp=null; engine.fling=null; clearHighlights();
     if(skin==='dial'){ engine.angle=dialAngles.goodbye; engine.idleAngle=engine.angle; engine.pos=dialPoint(engine.angle); }
     else engine.pos={...pos.goodbye};
   }
@@ -491,21 +491,31 @@
   }
   // opts.jerky: (noir) big random lurches between safe spots; opts.surge: presence spikes
   // during the last TIMING.surgeLead seconds of the idle, heralding the next action.
+  // opts.ramp: activity builds over the idle — it starts by stirring around where it is, then
+  // the jerks grow until it is lurching across the board (used for the lead-in to YES).
   function startIdle(seconds,opts){
     opts=opts||{};
     return new Promise(res=>{
       engine.mode='idle'; engine.idleEndClock=engine.clock+seconds; engine.resolver=res;
       engine.surgeAt = opts.surge ? engine.idleEndClock-rand(TIMING.surgeLead[0],TIMING.surgeLead[1]) : Infinity;
       engine.surgeEnd = Infinity;
+      engine.ramp = opts.ramp ? {t0:engine.clock, t1:Math.max(engine.clock+1, engine.idleEndClock-0.5), angle:engine.angle} : null;
       initIdleMotion(opts.jerky);
     });
   }
+  const activity=()=>engine.ramp ? clamp((engine.clock-engine.ramp.t0)/(engine.ramp.t1-engine.ramp.t0),0,1) : 1;
   const surging=()=>engine.clock>=engine.surgeAt && engine.clock<engine.surgeEnd;
 
   /* ---- idle motion: wander between spots that are NOT on a glyph ---- */
   function initIdleMotion(jerky){
-    if(skin==='dial'){ engine.idleAngle=safeDialAngle(false); engine.idleRetarget=engine.clock+rand(1.1,2.2); }
+    if(skin==='dial'){ engine.idleAngle=engine.ramp?safeDialAngle(true):safeDialAngle(false); engine.idleRetarget=engine.clock+rand(1.1,2.2); }
     else initNoirIdle(jerky);
+  }
+  function dialGapWithin(center,maxDelta){   // a gap near `center`, but not the one we're on
+    const gaps=dialGaps.length?dialGaps:ALPHA.map((_,i)=>(i+0.5)/ALPHA.length*TWO_PI);
+    const ok=gaps.filter(g=>Math.abs(shortestDelta(center,g))<=maxDelta && Math.abs(shortestDelta(engine.angle,g))>0.05);
+    if(!ok.length) return safeDialAngle(true);
+    const g=ok[Math.floor(Math.random()*ok.length)]; return engine.angle+shortestDelta(engine.angle,g);
   }
   function safeDialAngle(nearest){
     const gaps=dialGaps.length?dialGaps:ALPHA.map((_,i)=>(i+0.5)/ALPHA.length*TWO_PI);
@@ -547,12 +557,28 @@
   const noirIdleWobble=()=>idleWobble(engine.idlePhase*0.8, 3.2*scale);   // small: keeps a resting pointer in its gap
   function initNoirIdle(jerky){
     const w=noirIdleWobble(), b={x:engine.pos.x-w.x, y:engine.pos.y-w.y};
-    engine.nIdle={jerky:!!jerky, from:b, to:b, base:b, t:0, dur:1, ease:easeSmooth,
+    engine.nIdle={jerky:!!jerky, from:b, to:b, base:b, home:{...b}, t:0, dur:1, ease:easeSmooth,
                   next:engine.clock+(jerky?rand(0.3,0.9):rand(0.2,0.6))};
+  }
+  // A spot within maxD of `home` that isn't sitting on a glyph (for stirring around a landing spot).
+  function localPoint(home,maxD){
+    const m=30*scale;
+    for(let i=0;i<40;i++){ const a=rand(0,TWO_PI), d=rand(maxD*0.3,maxD);
+      const p={x:clamp(home.x+Math.cos(a)*d, L.x0+m, L.x1-m), y:clamp(home.y+Math.sin(a)*d, m, H-m)};
+      const {g,c}=glyphGap(p); if(g>=15*scale && c>=6*scale) return p; }
+    return pickAnchor(home,0,60*scale,false);
   }
   function retargetNoirIdle(){
     const ni=engine.nIdle, here=ni.base; ni.from={...here}; ni.t=0;
-    const roll=ni.jerky?Math.random():1;
+    if(engine.ramp){
+      const act=activity(), pJerk=clamp((act-0.3)/0.55,0,1);
+      if(Math.random()>=pJerk){   // still stirring around where it landed; the circle widens as activity builds
+        ni.to=localPoint(ni.home, (18+act*110)*scale); ni.dur=rand(1.0,2.0)*(1-0.4*act); ni.ease=easeSmooth;
+        ni.next=engine.clock+ni.dur+rand(0.3,1.0)*(1-0.5*act);
+        return;
+      }
+    }
+    const roll=(ni.jerky||engine.ramp)?Math.random():1;
     if(roll<0.5){        // big lurch across the board
       ni.to=pickAnchor(here,W*0.3,W*0.75,true); ni.dur=rand(0.12,0.22); ni.ease=easeOutBack;
       ni.next=engine.clock+ni.dur+rand(0.3,1.2);
@@ -571,8 +597,9 @@
       // Wander: periodically swing to a fresh gap between letters so the needle
       // roams the whole dial (the short way) but never comes to rest on a glyph.
       if(engine.clock>=engine.idleRetarget){
-        engine.idleAngle = safeDialAngle(false);
-        engine.idleRetarget = engine.clock + rand(1.1,2.2);
+        const act=activity();
+        engine.idleAngle = engine.ramp && act<0.6 ? dialGapWithin(engine.ramp.angle, 0.45+act*2.2) : safeDialAngle(false);
+        engine.idleRetarget = engine.clock + rand(1.1,2.2)*(1-0.45*act);
       }
       const wob=idleWobble(engine.idlePhase*0.8, 2.5).x*0.012;
       const sway=Math.sin(engine.idlePhase*0.6)*0.008 + Math.sin(engine.idlePhase*1.3+0.7)*0.005;
@@ -602,7 +629,7 @@
   function fireAt(key){ engine.fired=true;
     if(key==='yes'||key==='no'||key==='goodbye') typeReadout(key.toUpperCase());
     else if(engine.isSpelling && key.length===1 && /[A-Z0-9]/.test(key)) typeReadout(key); }
-  function finishRoute(){ engine.route=[]; engine.mode='idle'; initIdleMotion(engine.nIdle&&engine.nIdle.jerky); const r=engine.resolver; engine.resolver=null; if(r)r(); }
+  function finishRoute(){ engine.route=[]; engine.mode='idle'; engine.ramp=null; initIdleMotion(engine.nIdle&&engine.nIdle.jerky); const r=engine.resolver; engine.resolver=null; if(r)r(); }
 
   function tickTravel(dt){
     const route=engine.route; if(!route.length){ finishRoute(); return; }
@@ -650,6 +677,29 @@
       if(!seg.target){ engine.ri++; engine.segStartAngle=engine.angle; engine.segSpeedMul=nextSpeedMul(); if(engine.ri>=route.length){finishRoute();} return; }
       setActive(seg.key); engine.dwellDur=rand(engine.dwellRange[0],engine.dwellRange[1]); engine.dwellT=engine.dwellDur; engine.dwelling=true; engine.fired=false; scheduleShudders();
     }
+  }
+
+  /* ---- fling: on release the planchette/needle keeps the flick's momentum, with friction,
+     bouncing off the screen edges (noir); the routine starts once it settles ---- */
+  function startFling(v){
+    return new Promise(res=>{ engine.fling={vx:v.vx, vy:v.vy, va:v.va, done:res}; engine.mode='fling'; });
+  }
+  function tickFling(dt){
+    const f=engine.fling; if(!f){ engine.mode='idle'; return; }
+    let stopped;
+    if(skin==='dial'){
+      f.va*=Math.exp(-1.5*dt); engine.angle+=f.va*dt; engine.pos=dialPoint(engine.angle);
+      engine.vel=Math.abs(f.va)*dialPR; stopped=Math.abs(f.va)<0.25;
+    } else {
+      const k=Math.exp(-2.6*dt); f.vx*=k; f.vy*=k;
+      let x=engine.pos.x+f.vx*dt, y=engine.pos.y+f.vy*dt;
+      const m=30*scale, x0=L.x0+m, x1=L.x1-m, y0=m, y1=H-m, e=0.72;   // e: bounce restitution
+      if(x<x0){ x=x0+(x0-x); f.vx=-f.vx*e; } else if(x>x1){ x=x1-(x-x1); f.vx=-f.vx*e; }
+      if(y<y0){ y=y0+(y0-y); f.vy=-f.vy*e; } else if(y>y1){ y=y1-(y-y1); f.vy=-f.vy*e; }
+      engine.pos={x:clamp(x,x0,x1), y:clamp(y,y0,y1)};
+      engine.vel=Math.hypot(f.vx,f.vy); stopped=engine.vel<25*scale;
+    }
+    if(stopped){ engine.fling=null; engine.mode='idle'; engine.vel=0; f.done(); }
   }
 
   function tickDoneIdle(dt){ tickIdle(dt); if(engine.clock>=engine.backToRestAt){ engine.mode='rest'; engine.vel=0; } }
@@ -727,7 +777,7 @@
   let last=0;
   function frame(ts){ const t=ts/1000; const dt=last===0?0.016:Math.min(t-last,0.05); last=t; engine.clock=t; drawFrame(dt,false); requestAnimationFrame(frame); }
   function drawFrame(dt,forceDraw){
-    if(!forceDraw){ switch(engine.mode){ case 'idle':tickIdle(dt);break; case 'travel':tickTravel(dt);break; case 'done-idle':tickDoneIdle(dt);break;
+    if(!forceDraw){ switch(engine.mode){ case 'idle':tickIdle(dt);break; case 'travel':tickTravel(dt);break; case 'done-idle':tickDoneIdle(dt);break; case 'fling':tickFling(dt);break;
       case 'dragging': if(engine.dragLast)engine.vel=dist(engine.pos,engine.dragLast)/Math.max(dt,0.001); engine.dragLast={...engine.pos}; break;
       default:engine.vel=0; } }
     Audio.setScrape(engine.vel/(300*scale));
@@ -746,11 +796,12 @@
         flashEl.style.opacity = i%2===0 ? 1 : 0; setTimeout(step, seq[i++]); };
       step(); });
   }
-  async function runRoutine(){
+  async function runRoutine(v){
     if(started)return; started=true; const id=++runId, alive=()=>id===runId;
     setPrompt('gone');                                                  // prompt fades, then the caret waits
     setTimeout(()=>{ if(alive()) readoutEl.classList.add('writing'); }, 450);
-    await startIdle(TIMING.beforeYes,{surge:true});                    if(!alive())return;
+    await startFling(v);                                               if(!alive())return;
+    await startIdle(TIMING.beforeYes,{surge:true,ramp:true});          if(!alive())return;
     await startRoute(["yes"], ATT.controlDwell, false);                if(!alive())return;
     await startIdle(TIMING.beforeNo,{jerky:true,surge:true});          if(!alive())return;
     await startRoute(["no"], ATT.controlDwell, false);                 if(!alive())return;
@@ -769,7 +820,7 @@
   // Before the routine the prompt walks the performer through it: "rest your fingertips…" →
   // (touch) "flick / spin… to begin" → (flick or spin, release) fade → blinking caret.
   // A touch-and-release without a real flick/spin leaves the second prompt up.
-  let dragging=false, dragStart=null, dragSpin=0;
+  let dragging=false, dragStart=null, dragSpin=0, dragSamples=[];
   const PROMPTS={ rest:{noir:'Rest your fingertips on the planchette', dial:'Rest your fingertips on the dial'},
                   flick:{noir:'Flick the planchette forward to begin', dial:'Spin the dial to begin'} };
   let promptStage='rest', promptTimer=null;
@@ -786,25 +837,39 @@
     if(skin==='dial'){ const a=Math.atan2(x-dialC.x, -(y-dialC.y)); dragSpin+=Math.abs(shortestDelta(engine.angle,a));
       engine.angle=engine.angle+shortestDelta(engine.angle,a); engine.pos=dialPoint(engine.angle); }
     else engine.pos={x,y};
+    const t=performance.now(); dragSamples.push({x:engine.pos.x, y:engine.pos.y, a:engine.angle, t});
+    while(dragSamples.length>2 && t-dragSamples[0].t>100) dragSamples.shift();
+  }
+  // Release velocity from the last ~100ms of movement; a finger that paused before lifting gives none.
+  function releaseVelocity(){
+    const now=performance.now(), s=dragSamples.filter(q=>now-q.t<=100), zero={vx:0,vy:0,va:0};
+    if(s.length<2) return zero; const a=s[0], b=s[s.length-1], dt=(b.t-a.t)/1000;
+    if(dt<0.008 || now-b.t>70) return zero;
+    let vx=(b.x-a.x)/dt, vy=(b.y-a.y)/dt; const sp=Math.hypot(vx,vy), cap=3500*scale;
+    if(sp>cap){ vx*=cap/sp; vy*=cap/sp; }
+    return {vx, vy, va:clamp((b.a-a.a)/dt,-25,25)};
   }
   function onDragStart(e){
     if(engine.mode!=='rest' && engine.mode!=='done-idle') return;   // not while the routine runs
     e.preventDefault(); Audio.unlock();
-    dragging=true; engine.mode='dragging'; engine.dragLast=null; dragSpin=0; dragPoint(e); dragSpin=0;
+    dragging=true; engine.mode='dragging'; engine.dragLast=null; dragSamples=[]; dragSpin=0; dragPoint(e); dragSpin=0;
     dragStart={...engine.pos};
     if(!started && document.body.classList.contains('revealed')) setPrompt('flick');
   }
   function onDragMove(e){ if(!dragging) return; e.preventDefault(); dragPoint(e); }
   function onDragEnd(){
     if(!dragging) return; dragging=false;
+    const v=releaseVelocity();
     if(!started){                                       // release after a real flick/spin → start the routine
-      const enough = skin==='dial' ? dragSpin>0.5 : dist(engine.pos,dragStart)>30*scale;
-      if(enough) runRoutine(); else { engine.mode='rest'; engine.vel=0; }
+      const enough = skin==='dial' ? dragSpin>0.5 || Math.abs(v.va)>3
+                                   : dist(engine.pos,dragStart)>30*scale || Math.hypot(v.vx,v.vy)>300*scale;
+      if(enough) runRoutine(v); else { engine.mode='rest'; engine.vel=0; }
     }
-    else { engine.mode='done-idle'; engine.idlePhase=0; // post-routine → idle, never re-run
+    else { const id=runId; startFling(v).then(()=>{ if(id!==runId) return;   // post-routine → coast, idle, never re-run
+      engine.mode='done-idle'; engine.idlePhase=0;
       if(skin==='dial'){ engine.idleAngle=safeDialAngle(true); engine.idleRetarget=engine.clock+rand(1.1,2.2); }
       else initNoirIdle(false);
-      engine.backToRestAt=engine.clock+rand(3.5,5.5); }
+      engine.backToRestAt=engine.clock+rand(3.5,5.5); }); }
   }
   planEl.addEventListener('pointerdown',onDragStart,{passive:false});
   dialLayer.addEventListener('pointerdown',onDragStart,{passive:false});
