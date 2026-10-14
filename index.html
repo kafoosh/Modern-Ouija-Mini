@@ -61,9 +61,10 @@
   @keyframes blink{ 50%{ opacity:0; } }
   #flash{ position:fixed; inset:0; z-index:30; background:#fff; opacity:0; pointer-events:none; }
   #presence{ position:absolute; left:50%; transform:translateX(-50%); opacity:.55; pointer-events:none; }
-  #hint{ position:absolute; left:50%; bottom:5%; transform:translateX(-50%); color:var(--instruction);
-    font-size:11px; letter-spacing:.16em; text-transform:uppercase; text-align:center;
-    transition:opacity 1s ease; pointer-events:none; }
+  /* the prompt shares the readout line: shown before the routine, then the caret takes over */
+  #hint{ position:absolute; left:50%; transform:translate(-50%,-50%); color:var(--instruction);
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase; text-align:center; line-height:1.6;
+    transition:opacity .4s ease; pointer-events:none; }
   body[data-skin="dial"] #hint{ color:rgba(255,255,255,.4); }
 
   /* ---------- the password page ---------- */
@@ -296,6 +297,8 @@
   const ctrlDisplay=k=> k==="yes"?"YES" : k==="no"?"No" : k==="goodbye"?"GOODBYE" : k;
 
   let W=0,H=0,scale=1;
+  /* orientation-dependent placements, filled in by buildLayout (L.* are stage px) */
+  let L={};
   let skin = (localStorage.getItem('ouija-skin')==='dial') ? 'dial' : 'noir';
 
   /* noir positions */
@@ -309,12 +312,27 @@
 
   function buildLayout(){
     const vw=window.innerWidth, vh=window.innerHeight;
-    let h=Math.min(vh*0.99, vw*0.99/0.52); let w=h*0.52;
+    const landscape = vw>vh*1.05;
+    let w,h;
+    if(!landscape){ h=Math.min(vh*0.99, vw*0.99/0.52); w=h*0.52; }
+    else {
+      // Landscape: stack presence → readout → board tightly so the board can be as wide as the
+      // short side allows (the dial needs more height than the noir arcs).
+      const k = skin==='dial' ? 1.06 : 0.83;
+      w=Math.min(vw*0.96, vh*0.97/k); h=w*k;
+    }
     W=Math.round(w); H=Math.round(h); scale=W/REF_W;
     stage.style.width=W+"px"; stage.style.height=H+"px";
+    // Landscape leaves empty screen either side of the stage — let the idle planchette roam into it.
+    const side = landscape ? clamp((vw-W)/2-50, 0, W*0.35) : 0;
+    L = landscape
+      ? { presTop:0, presH:W*0.09, readTop:W*0.10, cy:W*0.68, controlMin:0, dialCY:W*0.63,
+          x0:-side, x1:W+side, safeX0:-side+W*0.08, safeX1:W+side-W*0.08, safeY0:W*0.25, safeY1:H-W*0.09 }
+      : { presTop:H*0.035, presH:H*0.09, readTop:H*0.155, cy:H*0.62, controlMin:H*0.78, dialCY:H*0.46,
+          x0:0, x1:W, safeX0:W*0.08, safeX1:W*0.92, safeY0:H*0.2, safeY1:H*0.88 };
 
     /* --- noir arc geometry (LetterLayout.swift) --- */
-    const cx=W/2, cy=H*0.62, upperR=W*0.46, lowerR=W*0.345;
+    const cx=W/2, cy=L.cy, upperR=W*0.46, lowerR=W*0.345;
     const upSweep={s:152,e:28}, loSweep={s:149,e:31};
     const polar=(deg,r)=>({x:cx+r*Math.cos(deg*Math.PI/180), y:cy-r*Math.sin(deg*Math.PI/180)});
     pos={};
@@ -323,12 +341,12 @@
     const digitArea=W*0.88, digitStartX=(W-digitArea)/2+digitArea/(DIGITS.length*2);
     const digitY=polar(loSweep.e,lowerR).y+46*scale;
     DIGITS.forEach((ch,i)=>{ pos[ch]={x:digitStartX+i*digitArea/DIGITS.length, y:digitY}; });
-    const controlY=Math.max(digitY+56*scale, H*0.78);
+    const controlY=Math.max(digitY+56*scale, L.controlMin);
     pos.yes={x:W*0.22,y:controlY}; pos.goodbye={x:W*0.50,y:controlY}; pos.no={x:W*0.78,y:controlY};
     idleCenter={x:W/2, y:cy-(upperR+lowerR)/2};
 
     /* --- dial geometry (DialLayout.swift) --- */
-    const R=W*0.46, dc={x:W/2, y:H*0.46}, rOut=R*0.87, rIn=R*0.73;
+    const R=W*0.46, dc={x:W/2, y:L.dialCY}, rOut=R*0.87, rIn=R*0.73;
     dialC=dc; dialR=R; dialPR=rOut; dialAngles={}; dialItems=[];
     const pt=(a,r)=>({x:dc.x+Math.sin(a)*r, y:dc.y-Math.cos(a)*r});
     ALPHA.forEach((ch,i)=>{ const a=i/26*TWO_PI; dialAngles[ch]=a; dialItems.push({key:ch,display:ch,angle:a,r:rOut,isControl:false}); });
@@ -349,7 +367,7 @@
 
     layoutPresence(); layoutReadout(); buildPlanchetteSvg();
     if(engine.mode==='rest') resetToRest();
-    else { engine.pos={x:clamp(engine.pos.x,10,W-10),y:clamp(engine.pos.y,10,H-10)};
+    else { engine.pos={x:clamp(engine.pos.x,L.x0+10,L.x1-10),y:clamp(engine.pos.y,10,H-10)};
       if(engine.mode==='idle'||engine.mode==='done-idle') initIdleMotion(engine.nIdle&&engine.nIdle.jerky); }
     applySkinVisibility();
     drawFrame(0,true);
@@ -365,11 +383,13 @@
     const ctrl=(key,text)=>{ const el=add(key,text,"control",fC); el.style.padding=(9*scale)+"px "+(16*scale)+"px"; el.id=key; };
     ctrl("yes","Yes"); ctrl("no","No"); ctrl("goodbye","Goodbye");
   }
-  function layoutPresence(){ const pw=Math.round(W*0.6), ph=Math.round(H*0.09);
+  function layoutPresence(){ const pw=Math.round(W*0.6), ph=Math.round(L.presH);
     presenceCv.width=pw; presenceCv.height=ph; presenceCv.style.width=pw+"px"; presenceCv.style.height=ph+"px";
-    presenceCv.style.top=(H*0.035)+"px"; seis.length=0; for(let i=0;i<Math.floor(pw/2);i++)seis.push(0); }
-  function layoutReadout(){ readoutEl.style.top=(H*0.155)+"px"; readoutEl.style.fontSize=(26*scale).toFixed(1)+"px";
-    document.getElementById('caret').style.height=(22*scale)+"px"; }
+    presenceCv.style.top=L.presTop+"px"; seis.length=0; for(let i=0;i<Math.floor(pw/2);i++)seis.push(0); }
+  function layoutReadout(){ readoutEl.style.top=L.readTop+"px"; readoutEl.style.fontSize=(26*scale).toFixed(1)+"px";
+    document.getElementById('caret').style.height=(22*scale)+"px";
+    hintEl.style.top=(L.readTop+13*scale)+"px"; hintEl.style.fontSize=clamp(11*scale,11,14).toFixed(1)+"px";
+    hintEl.style.width=Math.min(W*0.92, window.innerWidth-32)+"px"; }
 
   function buildPlanchetteSvg(){
     const r=26*scale, halo=r+7*scale, box=(halo+4)*2;
@@ -479,7 +499,7 @@
     return engine.angle+shortestDelta(engine.angle,pick);
   }
   function isSafeNoir(p){
-    if(p.x<W*0.08||p.x>W*0.92||p.y<H*0.2||p.y>H*0.88) return false;
+    if(p.x<L.safeX0||p.x>L.safeX1||p.y<L.safeY0||p.y>L.safeY1) return false;
     for(const k in pos){ const q=pos[k];
       if(k==='yes'||k==='no'||k==='goodbye'){ if(Math.abs(p.x-q.x)<(k==='goodbye'?75:55)*scale && Math.abs(p.y-q.y)<32*scale) return false; }
       else if(Math.hypot(p.x-q.x,p.y-q.y)<30*scale) return false; }
@@ -488,8 +508,8 @@
   function safeNoirPoint(from,minD,maxD){
     for(let i=0;i<300;i++){ const a=rand(0,TWO_PI), d=rand(minD,maxD);
       const p={x:from.x+Math.cos(a)*d, y:from.y+Math.sin(a)*d}; if(isSafeNoir(p)) return p; }
-    for(let i=0;i<300;i++){ const p={x:rand(W*0.1,W*0.9), y:rand(H*0.2,H*0.86)}; if(isSafeNoir(p)) return p; }
-    return {x:W/2, y:H*0.28};   // open space above the letter arcs
+    for(let i=0;i<300;i++){ const p={x:rand(L.safeX0,L.safeX1), y:rand(L.safeY0,L.safeY1)}; if(isSafeNoir(p)) return p; }
+    return {x:W/2, y:L.cy-W*0.21};   // open space inside the lower letter arc
   }
   const easeSmooth=f=>f*f*(3-2*f);
   const easeOutCubic=f=>1-Math.pow(1-f,3);
@@ -697,8 +717,9 @@
       step(); });
   }
   async function runRoutine(){
-    if(started)return; started=true; const id=++runId, alive=()=>id===runId; hintEl.style.opacity=0;
-    readoutEl.classList.add('writing');
+    if(started)return; started=true; const id=++runId, alive=()=>id===runId;
+    setPrompt('gone');                                                  // prompt fades, then the caret waits
+    setTimeout(()=>{ if(alive()) readoutEl.classList.add('writing'); }, 450);
     await startIdle(TIMING.beforeYes,{surge:true});                    if(!alive())return;
     await startRoute(["yes"], ATT.controlDwell, false);                if(!alive())return;
     await startIdle(TIMING.beforeNo,{jerky:true,surge:true});          if(!alive())return;
@@ -715,22 +736,41 @@
   // The performer DRAGS the planchette / rotates the needle, then releases to
   // start the routine (the iOS app's wake gesture). After the routine, a
   // drag-release just sends it idle again — it never re-runs.
-  let dragging=false;
+  // Before the routine the prompt walks the performer through it: "rest your fingertips…" →
+  // (touch) "flick / spin… to begin" → (flick or spin, release) fade → blinking caret.
+  // A touch-and-release without a real flick/spin leaves the second prompt up.
+  let dragging=false, dragStart=null, dragSpin=0;
+  const PROMPTS={ rest:{noir:'Rest your fingertips on the planchette', dial:'Rest your fingertips on the dial'},
+                  flick:{noir:'Flick the planchette forward to begin', dial:'Spin the dial to begin'} };
+  let promptStage='rest', promptTimer=null;
+  function setPrompt(stage,instant){
+    const changed=stage!==promptStage; promptStage=stage; clearTimeout(promptTimer); promptTimer=null;
+    const show=()=>{ if(stage!=='gone'){ hintEl.textContent=PROMPTS[stage][skin]; hintEl.style.opacity=1; } };
+    if(instant){ hintEl.style.opacity = stage==='gone'?0:1; show(); return; }
+    if(!changed) return;
+    hintEl.style.opacity=0; if(stage!=='gone') promptTimer=setTimeout(()=>{ promptTimer=null; show(); },420);
+  }
   function dragPoint(e){
     const r=stage.getBoundingClientRect();
-    const x=clamp(e.clientX-r.left,0,W), y=clamp(e.clientY-r.top,0,H);
-    if(skin==='dial'){ engine.angle=Math.atan2(x-dialC.x, -(y-dialC.y)); engine.pos=dialPoint(engine.angle); }
+    const x=clamp(e.clientX-r.left,L.x0,L.x1), y=clamp(e.clientY-r.top,0,H);
+    if(skin==='dial'){ const a=Math.atan2(x-dialC.x, -(y-dialC.y)); dragSpin+=Math.abs(shortestDelta(engine.angle,a));
+      engine.angle=engine.angle+shortestDelta(engine.angle,a); engine.pos=dialPoint(engine.angle); }
     else engine.pos={x,y};
   }
   function onDragStart(e){
     if(engine.mode!=='rest' && engine.mode!=='done-idle') return;   // not while the routine runs
     e.preventDefault(); Audio.unlock();
-    dragging=true; engine.mode='dragging'; engine.dragLast=null; dragPoint(e);
+    dragging=true; engine.mode='dragging'; engine.dragLast=null; dragSpin=0; dragPoint(e); dragSpin=0;
+    dragStart={...engine.pos};
+    if(!started && document.body.classList.contains('revealed')) setPrompt('flick');
   }
   function onDragMove(e){ if(!dragging) return; e.preventDefault(); dragPoint(e); }
   function onDragEnd(){
     if(!dragging) return; dragging=false;
-    if(!started){ runRoutine(); }                       // release → start the routine
+    if(!started){                                       // release after a real flick/spin → start the routine
+      const enough = skin==='dial' ? dragSpin>0.5 : dist(engine.pos,dragStart)>30*scale;
+      if(enough) runRoutine(); else { engine.mode='rest'; engine.vel=0; }
+    }
     else { engine.mode='done-idle'; engine.idlePhase=0; // post-routine → idle, never re-run
       if(skin==='dial'){ engine.idleAngle=safeDialAngle(true); engine.idleRetarget=engine.clock+rand(1.1,2.2); }
       else initNoirIdle(false);
@@ -749,11 +789,12 @@
     planEl.style.display = dial?'none':'block';
     dialLayer.style.display = dial?'block':'none';
     document.body.dataset.skin = skin;
-    hintEl.textContent = dial ? 'rest your fingertips on the dial' : 'rest your fingertips on the planchette';
+    if(promptStage!=='gone' && !promptTimer) hintEl.textContent=PROMPTS[promptStage][skin];
   }
   function setSkin(s){ if(s===skin)return; skin=s; engine.skin=s; localStorage.setItem('ouija-skin',s);
     document.querySelectorAll('#skinToggle button').forEach(b=>b.classList.toggle('on', b.dataset.skin===s));
-    resetReadout(); runId++; flashEl.style.opacity=0; clearHighlights(); started=false; hintEl.style.opacity=1; applySkinVisibility(); resetToRest(); drawFrame(0,true); }
+    resetReadout(); runId++; flashEl.style.opacity=0; clearHighlights(); started=false; setPrompt('rest',true);
+    resetToRest(); buildLayout(); }
   document.querySelectorAll('#skinToggle button').forEach(b=> b.addEventListener('click',()=>setSkin(b.dataset.skin)) );
   document.querySelectorAll('#skinToggle button').forEach(b=>b.classList.toggle('on', b.dataset.skin===skin));
 
@@ -782,7 +823,7 @@
     secretLetters=word.toUpperCase().split("").filter(c=>/[A-Z0-9]/.test(c));
     veil.classList.add('dismiss'); setTimeout(()=>{veil.style.display='none';},1200);
     document.body.classList.add('revealed');
-    Audio.beginBoard(); hintEl.style.opacity=1; }
+    Audio.beginBoard(); setPrompt('rest',true); }
   function showPwError(){ pwError.classList.add('show'); pwBox.classList.remove('shake'); void pwBox.offsetWidth; pwBox.classList.add('shake'); }
   // Wait out the double-press window before reacting: a quick SECOND press unlocks
   // (and never shows the error); a lone press shows "Incorrect password" only once
