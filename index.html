@@ -6,6 +6,22 @@
 <meta name="theme-color" content="#000000">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='1' y='1' width='30' height='30' rx='7' fill='%231C1C1E' stroke='%233A3A3C'/><path d='M11.5 15V12a4.5 4.5 0 0 1 9 0v3' fill='none' stroke='%23E6E6EA' stroke-width='2'/><rect x='9' y='15' width='14' height='11' rx='2.5' fill='%23E6E6EA'/><circle cx='16' cy='20' r='1.4' fill='%231C1C1E'/></svg>">
 <title>Protected</title>
+<script>
+/* Direct entry: board.oddpaq.com/<word> skips the password page. GitHub Pages serves 404.html
+   for that path, which hands the word over (sessionStorage, else #w=) and reloads "/". The word
+   is also read straight from the path in case a host serves this page there. The address bar is
+   then reset to the bare domain. Runs in <head> so the password page never paints. */
+(function(){
+  var w=null, dec=function(x){ try{ return decodeURIComponent(x); }catch(e){ return x; } };
+  try{ w=sessionStorage.getItem('ouija-word'); sessionStorage.removeItem('ouija-word'); }catch(e){}
+  if(w==null){ var m=location.hash.match(/^#w=(.*)$/); if(m) w=dec(m[1]); }
+  if(w==null){ var p=location.pathname.replace(/^\/+|\/+$/g,''); if(p && !/\.html?$/i.test(p)) w=dec(p); }
+  if(w && /[a-z0-9]/i.test(w)){
+    window.__directWord=w; document.documentElement.classList.add('direct');
+    try{ history.replaceState(null,'','/'); }catch(e){}
+  }
+})();
+</script>
 <style>
   /* ---------- shared ---------- */
   :root{
@@ -72,6 +88,7 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px;
     transition:opacity 1.1s ease; }
   #veil.dismiss{ opacity:0; pointer-events:none; }
+  html.direct #veil{ display:none; }
   #lock{ opacity:.55; }
   #veil .title{ color:#d7d7db; font-size:15px; font-weight:500; letter-spacing:.26em; text-transform:uppercase; text-align:center; padding:0 20px; }
   /* #pwBox is the box the user sees. The real <input id="pw"> sits inside it,
@@ -361,7 +378,7 @@
         return Math.abs(shortestDelta(g,it.angle))>=half; });
       if(clear) dialGaps.push(g); }
 
-    renderNoirGlyphs();
+    renderNoirGlyphs(); buildNoirAnchors();
     fctx=setupCanvas(dialFaceCv,W,H,DPR); dctx=setupCanvas(dialDynCv,W,H,DPR); sctx=setupCanvas(dialStaticCv,W,H,1);
     dialFaceDirty=true;
 
@@ -498,23 +515,36 @@
       pick=pool[Math.floor(Math.random()*pool.length)]; }
     return engine.angle+shortestDelta(engine.angle,pick);
   }
-  function isSafeNoir(p){
-    if(p.x<L.safeX0||p.x>L.safeX1||p.y<L.safeY0||p.y>L.safeY1) return false;
+  // Idle resting spots: a fine grid over the board, kept only where the pointer sits BETWEEN
+  // glyphs — clear of every letter/number/button, yet close enough to read as among them.
+  // The planchette glides or lurches across glyphs freely; it just never stops on one.
+  let noirAnchors=[], noirSideAnchors=[];
+  function glyphGap(p){ let g=Infinity, c=Infinity;
     for(const k in pos){ const q=pos[k];
-      if(k==='yes'||k==='no'||k==='goodbye'){ if(Math.abs(p.x-q.x)<(k==='goodbye'?75:55)*scale && Math.abs(p.y-q.y)<32*scale) return false; }
-      else if(Math.hypot(p.x-q.x,p.y-q.y)<30*scale) return false; }
-    return true;
+      if(k==='yes'||k==='no'||k==='goodbye'){ const hw=(k==='goodbye'?64:38)*scale, hh=18*scale;
+        c=Math.min(c, Math.hypot(Math.max(0,Math.abs(p.x-q.x)-hw), Math.max(0,Math.abs(p.y-q.y)-hh))); }
+      else g=Math.min(g, Math.hypot(p.x-q.x,p.y-q.y)); }
+    return {g,c};
   }
-  function safeNoirPoint(from,minD,maxD){
-    for(let i=0;i<300;i++){ const a=rand(0,TWO_PI), d=rand(minD,maxD);
-      const p={x:from.x+Math.cos(a)*d, y:from.y+Math.sin(a)*d}; if(isSafeNoir(p)) return p; }
-    for(let i=0;i<300;i++){ const p={x:rand(L.safeX0,L.safeX1), y:rand(L.safeY0,L.safeY1)}; if(isSafeNoir(p)) return p; }
-    return {x:W/2, y:L.cy-W*0.21};   // open space inside the lower letter arc
+  function buildNoirAnchors(){
+    noirAnchors=[]; noirSideAnchors=[]; const step=7*scale;
+    for(let y=L.safeY0; y<=L.safeY1; y+=step) for(let x=L.safeX0; x<=L.safeX1; x+=step){
+      const p={x,y}, {g,c}=glyphGap(p);
+      if(g<15*scale || c<6*scale) continue;                                   // on a glyph
+      if(Math.min(g, c+10*scale)<=40*scale && x>W*0.04 && x<W*0.96) noirAnchors.push(p);   // among the glyphs
+      else if((x<0||x>W) && Math.round(x/step)%4===0 && Math.round(y/step)%4===0) noirSideAnchors.push(p); // landscape margins
+    }
+    if(!noirAnchors.length) noirAnchors.push({x:W/2, y:L.cy-W*0.21});
+  }
+  function pickAnchor(from,minD,maxD,allowSide){
+    const src = allowSide && noirSideAnchors.length && Math.random()<0.15 ? noirSideAnchors : noirAnchors;
+    const near=src.filter(a=>{ const d=dist(a,from); return d>=minD && d<=maxD; });
+    const pool=near.length?near:src; return {...pool[Math.floor(Math.random()*pool.length)]};
   }
   const easeSmooth=f=>f*f*(3-2*f);
   const easeOutCubic=f=>1-Math.pow(1-f,3);
   const easeOutBack=f=>{ const c1=1.9,c3=c1+1,g=f-1; return 1+c3*g*g*g+c1*g*g; };   // lurch with overshoot
-  const noirIdleWobble=()=>idleWobble(engine.idlePhase*0.8, ATT.wobbleAmp*1.4*scale);
+  const noirIdleWobble=()=>idleWobble(engine.idlePhase*0.8, 3.2*scale);   // small: keeps a resting pointer in its gap
   function initNoirIdle(jerky){
     const w=noirIdleWobble(), b={x:engine.pos.x-w.x, y:engine.pos.y-w.y};
     engine.nIdle={jerky:!!jerky, from:b, to:b, base:b, t:0, dur:1, ease:easeSmooth,
@@ -524,13 +554,13 @@
     const ni=engine.nIdle, here=ni.base; ni.from={...here}; ni.t=0;
     const roll=ni.jerky?Math.random():1;
     if(roll<0.5){        // big lurch across the board
-      ni.to=safeNoirPoint(here,W*0.3,W*0.75); ni.dur=rand(0.12,0.22); ni.ease=easeOutBack;
+      ni.to=pickAnchor(here,W*0.3,W*0.75,true); ni.dur=rand(0.12,0.22); ni.ease=easeOutBack;
       ni.next=engine.clock+ni.dur+rand(0.3,1.2);
     } else if(roll<0.8){ // short sharp twitch (often in clusters)
-      ni.to=safeNoirPoint(here,12*scale,38*scale); ni.dur=rand(0.05,0.1); ni.ease=easeOutCubic;
+      ni.to=pickAnchor(here,12*scale,38*scale,false); ni.dur=rand(0.05,0.1); ni.ease=easeOutCubic;
       ni.next=engine.clock+ni.dur+rand(0.08,0.45);
     } else {             // slow drift, then hover
-      ni.to=safeNoirPoint(here,40*scale,150*scale); ni.dur=rand(ni.jerky?0.9:1.4, ni.jerky?1.6:2.6); ni.ease=easeSmooth;
+      ni.to=pickAnchor(here,40*scale,150*scale,false); ni.dur=rand(ni.jerky?0.9:1.4, ni.jerky?1.6:2.6); ni.ease=easeSmooth;
       ni.next=engine.clock+ni.dur+rand(0.4,1.4);
     }
   }
@@ -801,7 +831,6 @@
   /* ===== THE PASSWORD PAGE ===== */
   const veil=document.getElementById('veil'), pw=document.getElementById('pw'), pwError=document.getElementById('pwerror');
   const pwBox=document.getElementById('pwBox'), pwDots=document.getElementById('pwDots');
-  setTimeout(()=>pw.focus(),350);
   // Covert field: `pw` is a REAL <input type="password"> holding the actual word —
   // it is never shown (transparent text/caret, no visible native UI) and its value
   // is only ever read at the moment of unlock. The only thing rendered on screen is
@@ -819,11 +848,15 @@
   });
   pw.addEventListener('focus',()=>pwBox.classList.add('focused'));
   pw.addEventListener('blur',()=>pwBox.classList.remove('focused'));
-  function commune(){ Audio.unlock(); const word=pw.value; pw.value=""; renderMask(); pw.blur();
+  function commune(){ Audio.unlock(); const word=pw.value; pw.value=""; renderMask(); pw.blur(); reveal(word,false); }
+  function reveal(word,instant){
     secretLetters=word.toUpperCase().split("").filter(c=>/[A-Z0-9]/.test(c));
-    veil.classList.add('dismiss'); setTimeout(()=>{veil.style.display='none';},1200);
+    veil.classList.add('dismiss');
+    if(instant) veil.style.display='none'; else setTimeout(()=>{veil.style.display='none';},1200);
     document.body.classList.add('revealed');
     Audio.beginBoard(); setPrompt('rest',true); }
+  if(window.__directWord) reveal(window.__directWord,true);   // board.oddpaq.com/<word>
+  else setTimeout(()=>pw.focus(),350);
   function showPwError(){ pwError.classList.add('show'); pwBox.classList.remove('shake'); void pwBox.offsetWidth; pwBox.classList.add('shake'); }
   // Wait out the double-press window before reacting: a quick SECOND press unlocks
   // (and never shows the error); a lone press shows "Incorrect password" only once
