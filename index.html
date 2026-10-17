@@ -968,6 +968,20 @@
   showSound(false);   // sound ON by default — tap the icon to mute
   muteBtn.addEventListener('click',()=>{ showSound(Audio.toggleMute()); });
 
+  /* ===== WAKE LOCK — keep the screen from dimming through the long hands-off gaps =====
+     iOS drops the lock whenever the page is hidden, and may refuse it without a tap, so
+     retry on load, on any touch/key while unheld, and whenever the page becomes visible. */
+  let wakeLock=null, wakePending=false;
+  function keepAwake(){
+    if(wakeLock||wakePending||!navigator.wakeLock||document.visibilityState!=='visible') return;
+    wakePending=true;
+    navigator.wakeLock.request('screen').then(l=>{ wakeLock=l; l.addEventListener('release',()=>{ wakeLock=null; }); })
+      .catch(()=>{}).finally(()=>{ wakePending=false; });
+  }
+  ['pointerdown','keydown'].forEach(t=>document.addEventListener(t,keepAwake,true));
+  document.addEventListener('visibilitychange',keepAwake);
+  keepAwake();
+
   /* ===== BOOT ===== */
   buildLayout();
   let rzT; window.addEventListener('resize',()=>{ clearTimeout(rzT); rzT=setTimeout(buildLayout,120); });
