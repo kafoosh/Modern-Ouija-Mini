@@ -132,13 +132,25 @@
     color:#5a5a5e; cursor:pointer; opacity:.7; transition:opacity .25s ease; }
   #info:hover{ opacity:1; }
   #info svg{ width:100%; height:100%; display:block; }
-  #infoCard{ position:absolute; left:14px; top:54px; max-width:min(78vw,300px);
-    background:#161618; border:1px solid #2c2c2e; border-radius:12px; padding:14px 16px;
-    color:#b8b8bd; font-size:13px; line-height:1.55; letter-spacing:.01em;
+  #infoCard{ position:absolute; left:14px; top:54px; width:min(calc(100vw - 28px),300px);
+    background:#161618; border:1px solid #2c2c2e; border-radius:14px; padding:16px 18px 14px;
+    color:#b8b8bd; font-size:13px; line-height:1.5; letter-spacing:.01em;
     opacity:0; transform:translateY(-6px); pointer-events:none; transition:opacity .25s ease, transform .25s ease; }
-  #infoCard.show{ opacity:1; transform:translateY(0); }
+  #infoCard.show{ opacity:1; transform:translateY(0); pointer-events:auto; }
   #infoCard b{ color:#e6e6ea; font-weight:600; }
-  #infoCard a{ color:#ff7a1a; text-decoration:underline; }
+  #infoCard a{ color:#ff7a1a; text-decoration:none; }
+  #infoCard .eyebrow{ color:#6e6e73; font-size:10px; letter-spacing:.2em; text-transform:uppercase; margin-bottom:6px; }
+  #infoCard .lead{ color:#e6e6ea; font-size:14px; margin-bottom:12px; }
+  #infoCard ol{ list-style:none; counter-reset:step; display:flex; flex-direction:column; gap:9px; }
+  #infoCard li{ counter-increment:step; position:relative; padding-left:28px; }
+  #infoCard li::before{ content:counter(step); position:absolute; left:0; top:1px; width:18px; height:18px;
+    border:1px solid #3a3a3c; border-radius:50%; color:#8e8e93; font-size:10px; line-height:16px; text-align:center; }
+  #infoCard .appstore{ display:flex; align-items:center; justify-content:center; gap:6px; margin-top:16px;
+    padding:9px 14px; border:1px solid #3a3a3c; border-radius:999px; background:#1f1f22;
+    color:#e6e6ea; font-size:12px; letter-spacing:.04em; transition:background .2s ease, border-color .2s ease; }
+  #infoCard .appstore:hover{ background:#2a2a2d; border-color:#48484a; }
+  #infoCard .appstore svg{ width:11px; height:11px; flex:none; }
+  #infoCard .follow{ margin-top:12px; text-align:center; color:#6e6e73; font-size:11.5px; }
 
   /* skin toggle — on the board (top-right), hidden until the board is revealed */
   #skinToggle{ position:fixed; right:14px; top:14px; z-index:11; display:none; gap:2px;
@@ -201,7 +213,18 @@
         <circle cx="12" cy="12" r="9.2"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.6" r="0.9" fill="currentColor" stroke="none"/>
       </svg>
     </button>
-    <div id="infoCard">This page is not actually locked.<br>Type a word you wish to reveal, then press Enter twice.<br>The board will move through "Yes, No, Secret word, Goodbye" when you move the planchette.<br><br>Follow <a href="https://instagram.com/oddpaq" target="_blank" rel="noopener">@oddpaq</a> for more</div>
+    <div id="infoCard">
+      <div class="eyebrow">How it works</div>
+      <div class="lead">This page isn't actually locked.</div>
+      <ol>
+        <li>Type the word you want revealed, then press <b>Enter</b> twice.</li>
+        <li>Move the planchette to begin.</li>
+        <li>The board spells out <b>Yes</b>, <b>No</b>, your secret word, then <b>Goodbye</b>.</li>
+      </ol>
+      <a class="appstore" href="https://apps.apple.com/us/app/modern-ouija/id6782531445" target="_blank" rel="noopener">Full version on the App Store
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 2.5h5.5V8M9.5 2.5 2.5 9.5"/></svg></a>
+      <div class="follow">Follow <a href="https://instagram.com/oddpaq" target="_blank" rel="noopener">@oddpaq</a> for more</div>
+    </div>
 
     <div id="footer">A webapp by oddpaq</div>
   </div>
