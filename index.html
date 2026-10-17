@@ -310,11 +310,23 @@
         out[i]=(scrape+drone)*duck+art;
       }
     }
+    /* Run the context only while the page is on screen and unmuted. Android keeps Web Audio
+       playing from a backgrounded tab (and the throttled main thread starves the ScriptProcessor
+       into a stream of clicks), so suspend on hide/pagehide/freeze and when muted. */
+    let away=false;
+    function sync(){ if(!ctx||ctx.state==='closed')return;
+      if(muted||away||document.visibilityState==='hidden'){ if(ctx.state==='running'&&ctx.suspend)ctx.suspend().catch(()=>{}); }
+      else if(ctx.state!=='running'&&ctx.resume) ctx.resume().catch(()=>{}); }
+    document.addEventListener('visibilitychange',sync);
+    window.addEventListener('pagehide',()=>{ away=true; scrapeTarget=0; sync(); });
+    window.addEventListener('pageshow',()=>{ away=false; sync(); });
+    document.addEventListener('freeze',()=>{ away=true; sync(); });
+    document.addEventListener('resume',()=>{ away=false; sync(); });
     return {
-      unlock(){ if(build())ctx.resume&&ctx.resume(); },
-      beginBoard(){ if(build()){ ctx.resume&&ctx.resume(); boardActive=true; droneTarget=0.30; } },
+      unlock(){ if(build())sync(); },
+      beginBoard(){ if(build()){ boardActive=true; droneTarget=0.30; sync(); } },
       setScrape(norm){ scrapeTarget=clamp(norm,0,1)*0.85*scrapeVolume; },   // master.gain is the mute
-      toggleMute(){ muted=!muted; if(master)master.gain.value=muted?0:0.8; if(ctx&&ctx.resume)ctx.resume(); return muted; }
+      toggleMute(){ muted=!muted; if(master)master.gain.value=muted?0:0.8; sync(); return muted; }
     };
   })();
 
