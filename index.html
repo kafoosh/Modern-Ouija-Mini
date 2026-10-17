@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='1' y='1' width='30' height='30' rx='7' fill='%231C1C1E' stroke='%233A3A3C'/><path d='M11.5 15V12a4.5 4.5 0 0 1 9 0v3' fill='none' stroke='%23E6E6EA' stroke-width='2'/><rect x='9' y='15' width='14' height='11' rx='2.5' fill='%23E6E6EA'/><circle cx='16' cy='20' r='1.4' fill='%231C1C1E'/></svg>">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>Protected</title>
 <script>
 /* Direct entry: board.oddpaq.com/<word> skips the password page. GitHub Pages serves 404.html
@@ -202,7 +203,7 @@
     </button>
     <div id="infoCard">This page is not actually locked.<br>Type a word you wish to reveal, then press Enter twice.<br>The board will move through "Yes, No, Secret word, Goodbye" when you move the planchette.<br><br>Follow <a href="https://instagram.com/oddpaq" target="_blank" rel="noopener">@oddpaq</a> for more</div>
 
-    <div id="footer">A webapp by Kenneth Aidan Foo</div>
+    <div id="footer">A webapp by oddpaq</div>
   </div>
 
   <!-- supernatural interference: quick white flashes before the secret word -->
@@ -244,7 +245,7 @@
 
   /* ===== AUDIO — procedural, no assets (AudioEngine.swift) ===== */
   const Audio=(function(){
-    let ctx,sp,master,sr=44100,built=false,muted=true;   // sound OFF by default
+    let ctx,sp,master,sr=44100,built=false,muted=false;   // sound ON by default
     let scrapeTarget=0,scrapeLevel=0,droneTarget=0,droneLevel=0; const scrapeVolume=0.7;
     let boardActive=false,duck=1; const artifactRate=8;
     let samplesUntilNext=0,artType=0,artPos=0,artLen=1,artAmp=0;
@@ -941,7 +942,7 @@
   /* mute */
   const muteBtn=document.getElementById('mute'), waveEl=document.getElementById('wave');
   function showSound(muted){ muteBtn.style.opacity=muted?0.5:0.78; waveEl.style.display=muted?'none':''; }
-  showSound(true);   // sound OFF by default — tap the icon to turn it on
+  showSound(false);   // sound ON by default — tap the icon to mute
   muteBtn.addEventListener('click',()=>{ showSound(Audio.toggleMute()); });
 
   /* ===== BOOT ===== */
