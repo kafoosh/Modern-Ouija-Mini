@@ -271,11 +271,16 @@
     let ctx,sp,master,sr=44100,built=false,muted=false;   // sound ON by default
     let scrapeTarget=0,scrapeLevel=0,droneTarget=0,droneLevel=0; const scrapeVolume=0.7;
     let boardActive=false,duck=1; const artifactRate=8;
+    /* iOS mutes Web Audio on the ring/silent switch unless the page's audio session is
+       'playback' (Safari 16.4+ Audio Session API). Claim it only while sound is actually
+       running and hand it back ('auto') when suspended, so other apps' audio can resume.
+       Browsers without the API (Android Chrome) skip this entirely. */
+    function setSession(t){ try{ const s=navigator.audioSession; if(s&&s.type!==t)s.type=t; }catch(e){} }
     let samplesUntilNext=0,artType=0,artPos=0,artLen=1,artAmp=0;
     let creakPhase=0,creakF0=100,creakF1=200,creakLP=0,creakVib=0,creakTrem=0;
     let p1=0,p2=0,p3=0,lfo=0,lp=0;
     function build(){ if(built)return true; const AC=window.AudioContext||window.webkitAudioContext; if(!AC)return false;
-      ctx=new AC(); sr=ctx.sampleRate||44100; samplesUntilNext=Math.floor(sr*2);
+      if(!muted)setSession('playback'); ctx=new AC(); sr=ctx.sampleRate||44100; samplesUntilNext=Math.floor(sr*2);
       master=ctx.createGain(); master.gain.value=muted?0:0.8; master.connect(ctx.destination);
       sp=ctx.createScriptProcessor(2048,1,1); sp.onaudioprocess=render; sp.connect(master); built=true; return true; }
     function render(e){
@@ -315,8 +320,8 @@
        into a stream of clicks), so suspend on hide/pagehide/freeze and when muted. */
     let away=false;
     function sync(){ if(!ctx||ctx.state==='closed')return;
-      if(muted||away||document.visibilityState==='hidden'){ if(ctx.state==='running'&&ctx.suspend)ctx.suspend().catch(()=>{}); }
-      else if(ctx.state!=='running'&&ctx.resume) ctx.resume().catch(()=>{}); }
+      if(muted||away||document.visibilityState==='hidden'){ if(ctx.state==='running'&&ctx.suspend)ctx.suspend().catch(()=>{}); setSession('auto'); }
+      else { setSession('playback'); if(ctx.state!=='running'&&ctx.resume) ctx.resume().catch(()=>{}); } }
     document.addEventListener('visibilitychange',sync);
     window.addEventListener('pagehide',()=>{ away=true; scrapeTarget=0; sync(); });
     window.addEventListener('pageshow',()=>{ away=false; sync(); });
